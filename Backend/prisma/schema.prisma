@@ -9,10 +9,11 @@ datasource db {
 
 
 model User {
-  id            Int       @id @default(autoincrement()),
-  nome          String,   
-  email         String    @unique,
-  senhaHash     String,
-  role          String    @default("user"),
-  criadoEm      DateTime  @default(now());
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  login        String?   @unique
+  passwordHash String
+  role         String   @default("user")
+  createdAt    DateTime @default(now())
 }
