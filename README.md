@@ -1,2 +1,1 @@
 # ConexaoEmTrade
-automatização_whatsapp
