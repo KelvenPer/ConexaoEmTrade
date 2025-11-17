@@ -14,5 +14,5 @@ model User {
   email         String    @unique,
   senhaHash     String,
   role          String    @default("user"),
-  criadoEm      DateTime  @default(now())
+  criadoEm      DateTime  @default(now());
 }
