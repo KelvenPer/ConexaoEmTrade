@@ -1,0 +1,2 @@
+# ConexaoEmTrade
+automatização_whatsapp
