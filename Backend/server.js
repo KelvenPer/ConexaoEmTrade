@@ -4,6 +4,8 @@ require("dotenv").config();
 
 const authRoutes = require("./src/routes/auth");
 const fornecedorRoutes = require("./src/routes/fornecedores");
+const userRoutes = require("./src/routes/users");
+
 
 const app = express();
 
@@ -20,6 +22,7 @@ app.get("/", (req, res) => {
 // rotas de authenticação
 app.use("/api/auth", authRoutes);
 app.use("/api/fornecedores", fornecedorRoutes);
+app.use("/api/usuarios", userRoutes);
 
 
 const PORT = process.env.PORT || 8000;
