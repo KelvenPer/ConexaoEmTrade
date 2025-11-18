@@ -9,12 +9,12 @@ const router = express.Router();
 // POST /api/auth/novoCadastro
 router.post("/novoCadastro", async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, login, password } = req.body;
 
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !login) {
       return res
         .status(400)
-        .json({ message: "Nome, e-mail e senha são obrigatórios." });
+        .json({ message: "Nome, login, e-mail e senha são obrigatórios." });
     }
 
     // verifica se já existe usuário com esse e-mail
@@ -35,11 +35,13 @@ router.post("/novoCadastro", async (req, res) => {
       data: {
         name,
         email,
+        login,
         passwordHash,
       },
       select: {
         id: true,
         name: true,
+        login: true,
         email: true,
         role: true,
         createdAt: true,
@@ -59,16 +61,21 @@ router.post("/novoCadastro", async (req, res) => {
 // POST /api/auth/login
 router.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { loginOrEmail, password } = req.body;
 
-    if (!email || !password) {
+    if (!loginOrEmail || !password) {
       return res
         .status(400)
-        .json({ message: "E-mail e senha são obrigatórios." });
+        .json({ message: "Login/E-mail e senha são obrigatórios." });
     }
 
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { 
+        OR: [
+          {login: loginOrEmail},
+          {email: loginOrEmail},
+        ],
+      }
     });
 
     if (!user) {
