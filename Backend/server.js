@@ -3,6 +3,7 @@ const cors = require("cors");
 require("dotenv").config();
 
 const authRoutes = require("./src/routes/auth");
+const fornecedorRoutes = require("./src/routes/fornecedores");
 
 const app = express();
 
@@ -18,6 +19,8 @@ app.get("/", (req, res) => {
 
 // rotas de authenticação
 app.use("/api/auth", authRoutes);
+app.use("/api/fornecedores", fornecedorRoutes);
+
 
 const PORT = process.env.PORT || 8000;
 

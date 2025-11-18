@@ -18,7 +18,7 @@ router.post("/novoCadastro", async (req, res) => {
     }
 
     // verifica se já existe usuário com esse e-mail
-    const existing = await prisma.user.findUnique({
+    const existing = await prisma.TBLUSER.findUnique({
       where: { email },
     });
 
@@ -31,7 +31,7 @@ router.post("/novoCadastro", async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    const user = await prisma.user.create({
+    const user = await prisma.TBLUSER.create({
       data: {
         name,
         email,
@@ -61,19 +61,22 @@ router.post("/novoCadastro", async (req, res) => {
 // POST /api/auth/login
 router.post("/login", async (req, res) => {
   try {
-    const { loginOrEmail, password } = req.body;
+    const { login, email, password, loginOrEmail } = req.body;
 
-    if (!loginOrEmail || !password) {
+    // aceita login, email ou loginOrEmail
+    const identifier = loginOrEmail || login || email;
+
+    if (!identifier || !password) {
       return res
         .status(400)
         .json({ message: "Login/E-mail e senha são obrigatórios." });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { 
+    const user = await prisma.TBLUSER.findFirst({
+      where: {
         OR: [
-          {login: loginOrEmail},
-          {email: loginOrEmail},
+          { login: identifier },
+          { email: identifier },
         ],
       }
     });
