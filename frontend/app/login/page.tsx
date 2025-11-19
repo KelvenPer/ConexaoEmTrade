@@ -72,17 +72,8 @@ export default function LoginPage() {
     mode === "login" ? "seu.login" : "voce@empresa.com";
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-[#f3f4f6]">
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 420,
-          backgroundColor: "#ffffff",
-          borderRadius: 12,
-          padding: 24,
-          boxShadow: "0 10px 30px rgba(15, 23, 42, 0.15)",
-        }}
-      >
+    <div className="auth-layout">
+      <div className="auth-card">
         <h1
           style={{
             fontSize: 22,
@@ -285,6 +276,6 @@ export default function LoginPage() {
           resultados com foco em varejo.
         </p>
       </div>
-    </main>
+    </div>
   );
 }

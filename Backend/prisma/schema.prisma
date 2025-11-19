@@ -29,3 +29,18 @@ model TBLFORN {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
+
+model TBLATV {
+  id          Int      @id @default(autoincrement())
+  name        String              // Nome do ativo (ex: Ponta de Gôndola)
+  channel     String              // Canal (LOJA_FISICA, ECOMMERCE, APP, etc.)
+  type        String?             // Tipo: "in-store", "online", "app", etc.
+  format      String?             // Formato: "970x250", "vídeo 30s", etc.
+  unit        String?             // Unidade de venda: "por semana", "por mês", "por inserção"
+  basePrice   Float?              // Preço base do ativo
+  currency    String   @default("BRL")
+  description String?             // Descrição do ativo, observações
+  status      String   @default("ativo") // ativo / inativo
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

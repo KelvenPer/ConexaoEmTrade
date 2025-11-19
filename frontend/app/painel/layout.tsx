@@ -1,17 +1,15 @@
-// frontend/app/painel/layout.jsx
 "use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-export default function PainelLayout({ children }) {
+export default function PainelLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  // se um dia você quiser checar token aqui, dá pra fazer nesse useEffect
+  // Futuro: validar token aqui e redirecionar se não estiver logado
   useEffect(() => {
-    // exemplo futuro:
     // const token = localStorage.getItem("conexao_trade_token");
     // if (!token) router.push("/login");
   }, [router]);
@@ -54,7 +52,7 @@ export default function PainelLayout({ children }) {
             Conexão em Trade
           </div>
           <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>
-            Painel de Trade Marketing & Dados
+            Painel de Trade Marketing &amp; Dados
           </div>
         </div>
 
@@ -103,10 +101,7 @@ export default function PainelLayout({ children }) {
             <NavItem href="/painel/industria/parceiros" pathname={pathname}>
               Parceiros &amp; Contas
             </NavItem>
-            <NavItem
-              href="/painel/industria/visao-fornecedor"
-              pathname={pathname}
-            >
+            <NavItem href="/painel/industria/visao-fornecedor" pathname={pathname}>
               Visão por Fornecedor
             </NavItem>
             <NavItem href="/painel/industria/acordos" pathname={pathname}>
@@ -129,6 +124,9 @@ export default function PainelLayout({ children }) {
             </NavItem>
             <NavItem href="/painel/config/fornecedores" pathname={pathname}>
               Fornecedores
+            </NavItem>
+            <NavItem href="/painel/config/ativos" pathname={pathname}>
+              Ativos
             </NavItem>
           </Section>
         </nav>
@@ -166,7 +164,7 @@ export default function PainelLayout({ children }) {
           <button
             type="button"
             onClick={() => {
-              // placeholder: depois você pode limpar token, etc.
+              // Futuro: limpar tokens antes de sair
               // localStorage.removeItem("conexao_trade_token");
               // localStorage.removeItem("conexao_trade_user");
               router.push("/login");
@@ -199,7 +197,13 @@ export default function PainelLayout({ children }) {
   );
 }
 
-function Section({ title, children }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div style={{ marginBottom: 14 }}>
       <div
@@ -221,7 +225,15 @@ function Section({ title, children }) {
   );
 }
 
-function NavItem({ href, pathname, children }) {
+function NavItem({
+  href,
+  pathname,
+  children,
+}: {
+  href: string;
+  pathname: string | null;
+  children: React.ReactNode;
+}) {
   const isActive = pathname === href;
 
   return (
@@ -241,3 +253,4 @@ function NavItem({ href, pathname, children }) {
     </Link>
   );
 }
+

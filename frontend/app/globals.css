@@ -1,26 +1,203 @@
 @import "tailwindcss";
 
+/* Tokens base da aplicação */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f4f4f5;         /* fundo geral da página */
+  --foreground: #020617;         /* texto padrão */
+  --sidebar-bg: #020617;         /* fundo do menu lateral */
+  --content-bg: #f9fafb;         /* fundo do conteúdo */
 }
 
+/* Integração com tema inline (Next + Tailwind v4) */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  min-height: 100%;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ====== SHELL DO PAINEL (APP) ====== */
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: stretch;
+}
+
+/* Sidebar / menu lateral */
+.app-shell__sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--sidebar-bg);
+  color: #e5e7eb;
+  border-right: 1px solid rgba(148, 163, 184, 0.35);
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell__sidebar-header {
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-shell__sidebar-header-logo {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 20% 20%, #facc15, #eab308, #f97316);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.app-shell__sidebar-header-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.app-shell__sidebar-nav {
+  padding: 12px 8px 16px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Subtítulo de grupo do menu */
+.app-shell__nav-group-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  padding: 8px 12px;
+}
+
+/* Link do menu */
+.app-shell__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin: 2px 6px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: #e5e7eb;
+  text-decoration: none;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.app-shell__nav-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-shell__nav-label {
+  white-space: nowrap;
+}
+
+.app-shell__nav-item:hover {
+  background: rgba(148, 163, 184, 0.25);
+  transform: translateX(1px);
+}
+
+.app-shell__nav-item--active {
+  background: #facc15;
+  color: #020617;
+}
+
+/* Área de conteúdo do painel */
+.app-shell__content {
+  flex: 1;
+  min-width: 0;
+  background: var(--content-bg);
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+
+/* Scrollbar delicado no painel */
+.app-shell__sidebar-nav::-webkit-scrollbar,
+.app-shell__content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.app-shell__sidebar-nav::-webkit-scrollbar-track,
+.app-shell__content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-shell__sidebar-nav::-webkit-scrollbar-thumb,
+.app-shell__content::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.55);
+  border-radius: 999px;
+}
+
+/* ====== LAYOUT DE LOGIN ====== */
+
+.auth-layout {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(
+    circle at top,
+    #e5e7eb 0,
+    #f9fafb 35%,
+    #f4f4f5 100%
+  );
+  padding: 24px 16px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 24px 22px 20px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+/* ====== RESPONSIVO: SIDEBAR COMPACTA ====== */
+
+@media (max-width: 900px) {
+  .app-shell__sidebar {
+    width: 72px;
+  }
+
+  .app-shell__nav-item {
+    justify-content: center;
+  }
+
+  .app-shell__nav-label {
+    display: none;
+  }
+
+  .app-shell__sidebar-header-title {
+    display: none;
+  }
 }
