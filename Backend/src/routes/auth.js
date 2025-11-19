@@ -23,9 +23,9 @@ router.post("/novoCadastro", async (req, res) => {
     });
 
     if (existing) {
-      return res
-        .status(409)
-        .json({ message: "Já existe um usuário cadastrado com esse e-mail." });
+      return res.status(409).json({
+        message: "Já existe um usuário cadastrado com esse e-mail.",
+      });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -74,15 +74,15 @@ router.post("/login", async (req, res) => {
 
     const user = await prisma.TBLUSER.findFirst({
       where: {
-        OR: [
-          { login: identifier },
-          { email: identifier },
-        ],
-      }
+        status: "ativo", // só usuários ativos podem logar
+        OR: [{ login: identifier }, { email: identifier }],
+      },
     });
 
     if (!user) {
-      return res.status(401).json({ message: "Credenciais inválidas." });
+      return res.status(401).json({
+        message: "Usuário inativo ou credenciais inválidas.",
+      });
     }
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
@@ -108,6 +108,7 @@ router.post("/login", async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        status: user.status,
       },
     });
   } catch (error) {

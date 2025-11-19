@@ -49,7 +49,7 @@ export default function LoginPage() {
       }
 
       // Redireciona para a home / dashboard depois do login
-      router.push("/");
+      router.push("/painel");
     } catch (err) {
       console.error(err);
       setErrorMsg("Erro inesperado ao fazer login.");

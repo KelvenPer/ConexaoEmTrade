@@ -4,6 +4,22 @@ const prisma = require("../prisma");
 
 const router = express.Router();
 
+// GET /api/fornecedores/ativos -> listar apenas fornecedores ativos
+router.get("/ativos", async (req, res) => {
+  try {
+    const fornecedores = await prisma.TBLFORN.findMany({
+      where: { status: "ativo" },
+      orderBy: { name: "asc" },
+    });
+    res.json(fornecedores);
+  } catch (error) {
+    console.error("Erro ao listar fornecedores ativos:", error);
+    res
+      .status(500)
+      .json({ message: "Erro ao listar fornecedores ativos." });
+  }
+});
+
 // GET /api/fornecedores -> listar todos
 router.get("/", async (req, res) => {
   try {
@@ -114,7 +130,7 @@ router.delete("/:id", async (req, res) => {
       return res.status(404).json({ message: "Fornecedor não encontrado." });
     }
 
-    await prisma.supplier.delete({
+    await prisma.TBLFORN.delete({
       where: { id },
     });
 

@@ -12,9 +12,10 @@ model TBLUSER {
   id           Int      @id @default(autoincrement())
   name         String
   email        String   @unique
-  login        String?   @unique
+  login        String?  @unique
   passwordHash String
   role         String   @default("user")
+  status       String   @default("ativo") // <-- NOVO CAMPO
   createdAt    DateTime @default(now())
 }
 

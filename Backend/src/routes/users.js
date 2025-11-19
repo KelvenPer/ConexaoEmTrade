@@ -19,6 +19,7 @@ router.get("/", async (req, res) => {
         login: true,
         email: true,
         role: true,
+        status: true,
         createdAt: true,
       },
     });
@@ -46,6 +47,7 @@ router.get("/:id", async (req, res) => {
         login: true,
         email: true,
         role: true,
+        status: true,
         createdAt: true,
       },
     });
@@ -68,7 +70,7 @@ router.get("/:id", async (req, res) => {
  */
 router.post("/", async (req, res) => {
   try {
-    const { name, email, login, password, role } = req.body;
+    const { name, email, login, password, role, status } = req.body;
 
     if (!name || !email || !login || !password) {
       return res.status(400).json({
@@ -106,6 +108,7 @@ router.post("/", async (req, res) => {
         login,
         passwordHash,
         role: role || "user",
+        status: status || "ativo",
       },
       select: {
         id: true,
@@ -113,6 +116,7 @@ router.post("/", async (req, res) => {
         login: true,
         email: true,
         role: true,
+        status: true,
         createdAt: true,
       },
     });
@@ -135,7 +139,7 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { name, email, login, password, role } = req.body;
+    const { name, email, login, password, role, status } = req.body;
 
     const usuarioAtual = await prisma.TBLUSER.findUnique({
       where: { id },
@@ -186,6 +190,7 @@ router.put("/:id", async (req, res) => {
         email: email ?? usuarioAtual.email,
         login: login ?? usuarioAtual.login,
         role: role ?? usuarioAtual.role,
+        status: status ?? usuarioAtual.status,
         passwordHash,
       },
       select: {
@@ -194,6 +199,7 @@ router.put("/:id", async (req, res) => {
         login: true,
         email: true,
         role: true,
+        status: true,
         createdAt: true,
       },
     });
