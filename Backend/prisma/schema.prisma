@@ -7,6 +7,212 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model TBLFORN {
+  id        Int      @id @default(autoincrement())
+  name      String
+  document  String?
+  segment   String?
+  channel   String?
+  status    String   @default("ativo")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jbps          TBLJBP[]
+  campanhas     TBLCAMPANHA[]
+  execPlanos    TBLEXECPLANO[]
+  retailPlanos  TBLRETAILMEDIA_PLANO[]
+  vendasResumos TBLVENDASRESUMO[]
+}
+
+model TBLATV {
+  id          Int      @id @default(autoincrement())
+  name        String
+  channel     String
+  type        String?
+  format      String?
+  unit        String?
+  basePrice   Float?
+  currency    String   @default("BRL")
+  description String?
+  status      String   @default("ativo")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  jbpItens         TBLJBPITEM[]
+  campanhaItens    TBLCAMPANHAITEM[]
+  execTarefas      TBLEXECTAREFA[]
+  retailMediaItens TBLRETAILMEDIA_ITEM[]
+}
+
+model TBLJBP {
+  id          Int       @id @default(autoincrement())
+  supplierId  Int
+  name        String
+  year        Int?
+  periodStart DateTime?
+  periodEnd   DateTime?
+  strategy    String?
+  kpiSummary  String?
+  totalBudget Float?
+  status      String    @default("rascunho")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById Int?
+
+  supplier TBLFORN      @relation(fields: [supplierId], references: [id])
+  itens    TBLJBPITEM[]
+
+  campanhas     TBLCAMPANHA[]
+  execPlanos    TBLEXECPLANO[]
+  retailPlanos  TBLRETAILMEDIA_PLANO[]
+  vendasResumos TBLVENDASRESUMO[]
+}
+
+model TBLJBPITEM {
+  id                  Int       @id @default(autoincrement())
+  jbpId               Int
+  assetId             Int
+  description         String?
+  initiativeType      String    @default("JBP")
+  periodStart         DateTime?
+  periodEnd           DateTime?
+  storeScope          String?
+  unit                String?
+  quantity            Int?
+  negotiatedUnitPrice Float?
+  totalValue          Float?
+  notes               String?
+
+  jbp   TBLJBP @relation(fields: [jbpId], references: [id])
+  asset TBLATV @relation(fields: [assetId], references: [id])
+
+  campanhaItens    TBLCAMPANHAITEM[]
+  execTarefas      TBLEXECTAREFA[]
+  retailMediaItens TBLRETAILMEDIA_ITEM[]
+}
+
+model TBLCAMPANHA {
+  id         Int       @id @default(autoincrement())
+  supplierId Int
+  jbpId      Int?
+  name       String
+  objective  String?
+  channel    String? // "LOJA_FISICA", "ECOMMERCE", "APP", etc.
+  startDate  DateTime?
+  endDate    DateTime?
+  status     String    @default("planejada") // planejada, em_producao, aprovada, veiculando, encerrada
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  supplier TBLFORN           @relation(fields: [supplierId], references: [id])
+  jbp      TBLJBP?           @relation(fields: [jbpId], references: [id])
+  itens    TBLCAMPANHAITEM[]
+}
+
+model TBLCAMPANHAITEM {
+  id               Int       @id @default(autoincrement())
+  campanhaId       Int
+  jbpItemId        Int?
+  assetId          Int
+  title            String?
+  contentType      String? // banner, video, push, post, etc.
+  artDeadline      DateTime?
+  approvalDeadline DateTime?
+  goLiveDate       DateTime?
+  urlDestino       String?
+  notes            String?
+
+  campanha TBLCAMPANHA @relation(fields: [campanhaId], references: [id])
+  jbpItem  TBLJBPITEM? @relation(fields: [jbpItemId], references: [id])
+  asset    TBLATV      @relation(fields: [assetId], references: [id])
+}
+
+model TBLEXECPLANO {
+  id          Int       @id @default(autoincrement())
+  supplierId  Int
+  jbpId       Int?
+  name        String
+  periodStart DateTime?
+  periodEnd   DateTime?
+  status      String    @default("planejado") // planejado, em_execucao, concluido
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  supplier TBLFORN         @relation(fields: [supplierId], references: [id])
+  jbp      TBLJBP?         @relation(fields: [jbpId], references: [id])
+  tarefas  TBLEXECTAREFA[]
+}
+
+model TBLEXECTAREFA {
+  id          Int       @id @default(autoincrement())
+  planoExecId Int
+  jbpItemId   Int?
+  assetId     Int
+  storeScope  String // "Todas as lojas", "Top 50", "Loja 001", etc.
+  checklist   String?
+  deadline    DateTime?
+  status      String    @default("pendente") // pendente, em_execucao, concluida
+  photoUrl    String?
+  notes       String?
+
+  planoExec TBLEXECPLANO @relation(fields: [planoExecId], references: [id])
+  jbpItem   TBLJBPITEM?  @relation(fields: [jbpItemId], references: [id])
+  asset     TBLATV       @relation(fields: [assetId], references: [id])
+}
+
+model TBLRETAILMEDIA_PLANO {
+  id          Int       @id @default(autoincrement())
+  supplierId  Int
+  jbpId       Int?
+  name        String
+  channel     String // "ECOMMERCE", "APP"
+  periodStart DateTime?
+  periodEnd   DateTime?
+  status      String    @default("planejado")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  supplier TBLFORN               @relation(fields: [supplierId], references: [id])
+  jbp      TBLJBP?               @relation(fields: [jbpId], references: [id])
+  itens    TBLRETAILMEDIA_ITEM[]
+}
+
+model TBLRETAILMEDIA_ITEM {
+  id                Int     @id @default(autoincrement())
+  planoRetailId     Int
+  jbpItemId         Int?
+  assetId           Int
+  pageType          String? // home, categoria, pdp...
+  position          String? // topo, meio, rodape, carrossel...
+  device            String? // desktop, mobile, ambos
+  impressionsTarget Int?
+  clicksTarget      Int?
+  cpcNegociado      Float?
+  totalValue        Float?
+  notes             String?
+
+  planoRetail TBLRETAILMEDIA_PLANO @relation(fields: [planoRetailId], references: [id])
+  jbpItem     TBLJBPITEM?          @relation(fields: [jbpItemId], references: [id])
+  asset       TBLATV               @relation(fields: [assetId], references: [id])
+}
+
+model TBLVENDASRESUMO {
+  id           Int     @id @default(autoincrement())
+  supplierId   Int
+  jbpId        Int?
+  ano          Int
+  mes          Int
+  channel      String? // LOJA_FISICA, ECOMMERCE, TOTAL
+  sellInValue  Float?
+  sellOutValue Float?
+  volume       Float?
+  marketShare  Float?
+  notes        String?
+
+  supplier TBLFORN @relation(fields: [supplierId], references: [id])
+  jbp      TBLJBP? @relation(fields: [jbpId], references: [id])
+}
 
 model TBLUSER {
   id           Int      @id @default(autoincrement())
@@ -15,32 +221,6 @@ model TBLUSER {
   login        String?  @unique
   passwordHash String
   role         String   @default("user")
-  status       String   @default("ativo") // <-- NOVO CAMPO
+  status       String   @default("ativo")
   createdAt    DateTime @default(now())
-}
-
-model TBLFORN {
-  id         Int      @id @default(autoincrement())
-  name       String
-  document   String?   // CNPJ / CPF
-  segment    String?   // segmento: bebidas, alimentos, higiene...
-  channel    String?   // canal principal: varejo, indústria, marketplace...
-  status     String    @default("ativo") // "ativo" | "inativo"
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-}
-
-model TBLATV {
-  id          Int      @id @default(autoincrement())
-  name        String              // Nome do ativo (ex: Ponta de Gôndola)
-  channel     String              // Canal (LOJA_FISICA, ECOMMERCE, APP, etc.)
-  type        String?             // Tipo: "in-store", "online", "app", etc.
-  format      String?             // Formato: "970x250", "vídeo 30s", etc.
-  unit        String?             // Unidade de venda: "por semana", "por mês", "por inserção"
-  basePrice   Float?              // Preço base do ativo
-  currency    String   @default("BRL")
-  description String?             // Descrição do ativo, observações
-  status      String   @default("ativo") // ativo / inativo
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 }

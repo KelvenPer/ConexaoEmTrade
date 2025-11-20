@@ -6,6 +6,8 @@ const authRoutes = require("./src/routes/auth");
 const fornecedorRoutes = require("./src/routes/fornecedores");
 const userRoutes = require("./src/routes/users");
 const ativosRoutes = require("./src/routes/ativos");
+const jbpRoutes = require("./src/routes/jbp");
+const campanhasRoutes = require("./src/routes/campanhas");
 
 
 
@@ -25,8 +27,9 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/fornecedores", fornecedorRoutes);
 app.use("/api/usuarios", userRoutes);
-app.use("/api/ativos", ativosRoutes)
-
+app.use("/api/ativos", ativosRoutes);
+app.use("/api/jbp", jbpRoutes);
+app.use("/api/campanhas", campanhasRoutes);
 
 const PORT = process.env.PORT || 8000;
 

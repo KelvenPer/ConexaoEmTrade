@@ -1,0 +1,699 @@
+// backend/src/routes/jbp.js
+const express = require("express");
+const prisma = require("../prisma");
+
+const router = express.Router();
+
+/**
+ * GET /api/jbp
+ * Lista JBPs com filtros opcionais ?year=2025&supplierId=1
+ */
+router.get("/", async (req, res) => {
+  try {
+    const { year, supplierId } = req.query;
+
+    const where = {};
+
+    if (year) {
+      const y = Number(year);
+      if (!Number.isNaN(y)) where.year = y;
+    }
+
+    if (supplierId) {
+      const s = Number(supplierId);
+      if (!Number.isNaN(s)) where.supplierId = s;
+    }
+
+    const jbps = await prisma.TBLJBP.findMany({
+      where,
+      orderBy: [
+        { year: "desc" },
+        { createdAt: "desc" },
+      ],
+      include: {
+        supplier: true,
+        itens: true,
+      },
+    });
+
+    res.json(jbps);
+  } catch (error) {
+    console.error("Erro ao listar JBP:", error);
+    res.status(500).json({ message: "Erro ao listar JBP." });
+  }
+});
+
+/**
+ * GET /api/jbp/:id
+ * Detalhe de um JBP, incluindo fornecedor e itens (com ativo)
+ */
+router.get("/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ message: "ID inválido." });
+    }
+
+    const jbp = await prisma.TBLJBP.findUnique({
+      where: { id },
+      include: {
+        supplier: true,
+        itens: {
+          include: {
+            asset: true,
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+    });
+
+    if (!jbp) {
+      return res.status(404).json({ message: "JBP não encontrado." });
+    }
+
+    res.json(jbp);
+  } catch (error) {
+    console.error("Erro ao buscar JBP:", error);
+    res.status(500).json({ message: "Erro ao buscar JBP." });
+  }
+});
+
+/**
+ * POST /api/jbp
+ * Cria um novo JBP (apenas cabeçalho)
+ */
+router.post("/", async (req, res) => {
+  try {
+    const {
+      supplierId,
+      name,
+      year,
+      periodStart,
+      periodEnd,
+      strategy,
+      kpiSummary,
+      totalBudget,
+      status,
+      createdById,
+    } = req.body;
+
+    if (!supplierId || !name) {
+      return res
+        .status(400)
+        .json({ message: "Fornecedor e nome do plano são obrigatórios." });
+    }
+
+    const supplierIdNumber = Number(supplierId);
+    if (Number.isNaN(supplierIdNumber)) {
+      return res.status(400).json({ message: "Fornecedor inválido." });
+    }
+
+    const dataToCreate = {
+      supplierId: supplierIdNumber,
+      name,
+      strategy: strategy || null,
+      kpiSummary: kpiSummary || null,
+      status: status || "rascunho",
+    };
+
+    if (year !== undefined && year !== null && year !== "") {
+      const y = Number(year);
+      if (!Number.isNaN(y)) dataToCreate.year = y;
+    }
+
+    if (periodStart) {
+      const d = new Date(periodStart);
+      if (!isNaN(d.getTime())) dataToCreate.periodStart = d;
+    }
+
+    if (periodEnd) {
+      const d = new Date(periodEnd);
+      if (!isNaN(d.getTime())) dataToCreate.periodEnd = d;
+    }
+
+    if (totalBudget !== undefined && totalBudget !== null && totalBudget !== "") {
+      const tb = Number(totalBudget);
+      if (!Number.isNaN(tb)) dataToCreate.totalBudget = tb;
+    }
+
+    if (createdById) {
+      const cb = Number(createdById);
+      if (!Number.isNaN(cb)) dataToCreate.createdById = cb;
+    }
+
+    const novo = await prisma.TBLJBP.create({
+      data: dataToCreate,
+    });
+
+    res.status(201).json(novo);
+  } catch (error) {
+    console.error("Erro ao criar JBP:", error);
+    res.status(500).json({ message: "Erro ao criar JBP." });
+  }
+});
+
+/**
+ * PUT /api/jbp/:id
+ * Atualiza cabeçalho de um JBP
+ */
+router.put("/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ message: "ID inválido." });
+    }
+
+    const existente = await prisma.TBLJBP.findUnique({ where: { id } });
+    if (!existente) {
+      return res.status(404).json({ message: "JBP não encontrado." });
+    }
+
+    const {
+      supplierId,
+      name,
+      year,
+      periodStart,
+      periodEnd,
+      strategy,
+      kpiSummary,
+      totalBudget,
+      status,
+    } = req.body;
+
+    const dataToUpdate = {};
+
+    if (supplierId !== undefined) {
+      const s = Number(supplierId);
+      if (!Number.isNaN(s)) dataToUpdate.supplierId = s;
+    }
+
+    if (name !== undefined) dataToUpdate.name = name;
+    if (strategy !== undefined) dataToUpdate.strategy = strategy || null;
+    if (kpiSummary !== undefined) dataToUpdate.kpiSummary = kpiSummary || null;
+    if (status !== undefined) dataToUpdate.status = status;
+
+    if (year !== undefined) {
+      if (year === null || year === "") {
+        dataToUpdate.year = null;
+      } else {
+        const y = Number(year);
+        if (!Number.isNaN(y)) dataToUpdate.year = y;
+      }
+    }
+
+    if (periodStart !== undefined) {
+      if (!periodStart) {
+        dataToUpdate.periodStart = null;
+      } else {
+        const d = new Date(periodStart);
+        if (!isNaN(d.getTime())) dataToUpdate.periodStart = d;
+      }
+    }
+
+    if (periodEnd !== undefined) {
+      if (!periodEnd) {
+        dataToUpdate.periodEnd = null;
+      } else {
+        const d = new Date(periodEnd);
+        if (!isNaN(d.getTime())) dataToUpdate.periodEnd = d;
+      }
+    }
+
+    if (totalBudget !== undefined) {
+      if (totalBudget === null || totalBudget === "") {
+        dataToUpdate.totalBudget = null;
+      } else {
+        const tb = Number(totalBudget);
+        if (!Number.isNaN(tb)) dataToUpdate.totalBudget = tb;
+      }
+    }
+
+    const atualizado = await prisma.TBLJBP.update({
+      where: { id },
+      data: dataToUpdate,
+    });
+
+    res.json(atualizado);
+  } catch (error) {
+    console.error("Erro ao atualizar JBP:", error);
+    res.status(500).json({ message: "Erro ao atualizar JBP." });
+  }
+});
+
+/**
+ * DELETE /api/jbp/:id
+ * (Opcional) Remove um JBP e seus itens
+ */
+router.delete("/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ message: "ID inválido." });
+    }
+
+    const existente = await prisma.TBLJBP.findUnique({ where: { id } });
+    if (!existente) {
+      return res.status(404).json({ message: "JBP não encontrado." });
+    }
+
+    await prisma.TBLJBPITEM.deleteMany({ where: { jbpId: id } });
+    await prisma.TBLJBP.delete({ where: { id } });
+
+    res.json({ message: "JBP e itens removidos com sucesso." });
+  } catch (error) {
+    console.error("Erro ao excluir JBP:", error);
+    res.status(500).json({ message: "Erro ao excluir JBP." });
+  }
+});
+
+/**
+ * POST /api/jbp/:id/itens
+ * Cria novo item de JBP
+ */
+router.post("/:id/itens", async (req, res) => {
+  try {
+    const jbpId = Number(req.params.id);
+    if (Number.isNaN(jbpId)) {
+      return res.status(400).json({ message: "JBP inválido." });
+    }
+
+    const {
+      assetId,
+      description,
+      initiativeType,
+      periodStart,
+      periodEnd,
+      storeScope,
+      unit,
+      quantity,
+      negotiatedUnitPrice,
+      totalValue,
+      notes,
+    } = req.body;
+
+    if (!assetId) {
+      return res.status(400).json({ message: "Ativo é obrigatório." });
+    }
+
+    const assetIdNumber = Number(assetId);
+    if (Number.isNaN(assetIdNumber)) {
+      return res.status(400).json({ message: "Ativo inválido." });
+    }
+
+    const dataToCreate = {
+      jbpId,
+      assetId: assetIdNumber,
+      description: description || null,
+      initiativeType: initiativeType || "JBP",
+      storeScope: storeScope || null,
+      unit: unit || null,
+      notes: notes || null,
+    };
+
+    if (periodStart) {
+      const d = new Date(periodStart);
+      if (!isNaN(d.getTime())) dataToCreate.periodStart = d;
+    }
+
+    if (periodEnd) {
+      const d = new Date(periodEnd);
+      if (!isNaN(d.getTime())) dataToCreate.periodEnd = d;
+    }
+
+    if (quantity !== undefined && quantity !== null && quantity !== "") {
+      const q = Number(quantity);
+      if (!Number.isNaN(q)) dataToCreate.quantity = q;
+    }
+
+    if (
+      negotiatedUnitPrice !== undefined &&
+      negotiatedUnitPrice !== null &&
+      negotiatedUnitPrice !== ""
+    ) {
+      const p = Number(negotiatedUnitPrice);
+      if (!Number.isNaN(p)) dataToCreate.negotiatedUnitPrice = p;
+    }
+
+    if (totalValue !== undefined && totalValue !== null && totalValue !== "") {
+      const t = Number(totalValue);
+      if (!Number.isNaN(t)) {
+        dataToCreate.totalValue = t;
+      }
+    } else if (
+      dataToCreate.quantity !== undefined &&
+      dataToCreate.negotiatedUnitPrice !== undefined
+    ) {
+      dataToCreate.totalValue =
+        dataToCreate.quantity * dataToCreate.negotiatedUnitPrice;
+    }
+
+    const item = await prisma.TBLJBPITEM.create({
+      data: dataToCreate,
+    });
+
+    res.status(201).json(item);
+  } catch (error) {
+    console.error("Erro ao criar item JBP:", error);
+    res.status(500).json({ message: "Erro ao criar item JBP." });
+  }
+});
+
+/**
+ * PUT /api/jbp/itens/:itemId
+ * Atualiza um item de JBP
+ */
+router.put("/itens/:itemId", async (req, res) => {
+  try {
+    const itemId = Number(req.params.itemId);
+    if (Number.isNaN(itemId)) {
+      return res.status(400).json({ message: "Item inválido." });
+    }
+
+    const existente = await prisma.TBLJBPITEM.findUnique({
+      where: { id: itemId },
+    });
+
+    if (!existente) {
+      return res.status(404).json({ message: "Item não encontrado." });
+    }
+
+    const {
+      assetId,
+      description,
+      initiativeType,
+      periodStart,
+      periodEnd,
+      storeScope,
+      unit,
+      quantity,
+      negotiatedUnitPrice,
+      totalValue,
+      notes,
+    } = req.body;
+
+    const dataToUpdate = {};
+
+    if (assetId !== undefined) {
+      const a = Number(assetId);
+      if (!Number.isNaN(a)) dataToUpdate.assetId = a;
+    }
+
+    if (description !== undefined) dataToUpdate.description = description || null;
+    if (initiativeType !== undefined)
+      dataToUpdate.initiativeType = initiativeType || "JBP";
+    if (storeScope !== undefined) dataToUpdate.storeScope = storeScope || null;
+    if (unit !== undefined) dataToUpdate.unit = unit || null;
+    if (notes !== undefined) dataToUpdate.notes = notes || null;
+
+    if (periodStart !== undefined) {
+      if (!periodStart) {
+        dataToUpdate.periodStart = null;
+      } else {
+        const d = new Date(periodStart);
+        if (!isNaN(d.getTime())) dataToUpdate.periodStart = d;
+      }
+    }
+
+    if (periodEnd !== undefined) {
+      if (!periodEnd) {
+        dataToUpdate.periodEnd = null;
+      } else {
+        const d = new Date(periodEnd);
+        if (!isNaN(d.getTime())) dataToUpdate.periodEnd = d;
+      }
+    }
+
+    if (quantity !== undefined) {
+      if (quantity === null || quantity === "") {
+        dataToUpdate.quantity = null;
+      } else {
+        const q = Number(quantity);
+        if (!Number.isNaN(q)) dataToUpdate.quantity = q;
+      }
+    }
+
+    if (negotiatedUnitPrice !== undefined) {
+      if (
+        negotiatedUnitPrice === null ||
+        negotiatedUnitPrice === ""
+      ) {
+        dataToUpdate.negotiatedUnitPrice = null;
+      } else {
+        const p = Number(negotiatedUnitPrice);
+        if (!Number.isNaN(p)) dataToUpdate.negotiatedUnitPrice = p;
+      }
+    }
+
+    if (totalValue !== undefined) {
+      if (totalValue === null || totalValue === "") {
+        dataToUpdate.totalValue = null;
+      } else {
+        const t = Number(totalValue);
+        if (!Number.isNaN(t)) dataToUpdate.totalValue = t;
+      }
+    }
+
+    // recalcula se necessário
+    const finalData = { ...dataToUpdate };
+
+    const qFinal =
+      finalData.quantity !== undefined ? finalData.quantity : existente.quantity;
+    const pFinal =
+      finalData.negotiatedUnitPrice !== undefined
+        ? finalData.negotiatedUnitPrice
+        : existente.negotiatedUnitPrice;
+
+    if (
+      (finalData.totalValue === undefined || finalData.totalValue === null) &&
+      qFinal !== null &&
+      qFinal !== undefined &&
+      pFinal !== null &&
+      pFinal !== undefined
+    ) {
+      finalData.totalValue = qFinal * pFinal;
+    }
+
+    const atualizado = await prisma.TBLJBPITEM.update({
+      where: { id: itemId },
+      data: finalData,
+    });
+
+    res.json(atualizado);
+  } catch (error) {
+    console.error("Erro ao atualizar item JBP:", error);
+    res.status(500).json({ message: "Erro ao atualizar item JBP." });
+  }
+});
+
+/**
+ * DELETE /api/jbp/itens/:itemId
+ */
+router.delete("/itens/:itemId", async (req, res) => {
+  try {
+    const itemId = Number(req.params.itemId);
+    if (Number.isNaN(itemId)) {
+      return res.status(400).json({ message: "Item inválido." });
+    }
+
+    const existente = await prisma.TBLJBPITEM.findUnique({
+      where: { id: itemId },
+    });
+
+    if (!existente) {
+      return res.status(404).json({ message: "Item não encontrado." });
+    }
+
+    await prisma.TBLJBPITEM.delete({
+      where: { id: itemId },
+    });
+
+    res.json({ message: "Item removido com sucesso." });
+  } catch (error) {
+    console.error("Erro ao excluir item JBP:", error);
+    res.status(500).json({ message: "Erro ao excluir item JBP." });
+  }
+});
+
+// POST /api/jbp/:id/gerar-contrato
+router.post("/:id/gerar-contrato", async (req, res) => {
+  try {
+    const jbpId = Number(req.params.id);
+    if (Number.isNaN(jbpId)) {
+      return res.status(400).json({ message: "JBP inválido." });
+    }
+
+    // 1) Buscar JBP + fornecedor + itens + ativo
+    const jbp = await prisma.TBLJBP.findUnique({
+      where: { id: jbpId },
+      include: {
+        supplier: true,
+        itens: {
+          include: {
+            asset: true,
+          },
+        },
+      },
+    });
+
+    if (!jbp) {
+      return res.status(404).json({ message: "JBP não encontrado." });
+    }
+
+    // 2) Regras simples para não duplicar tudo toda hora
+    // Verifica se já existe algo vinculado a esse JBP
+    const [campanhaExistente, execPlanoExistente, retailPlanoExistente] =
+      await Promise.all([
+        prisma.TBLCAMPANHA.findFirst({ where: { jbpId: jbp.id } }),
+        prisma.TBLEXECPLANO.findFirst({ where: { jbpId: jbp.id } }),
+        prisma.TBLRETAILMEDIA_PLANO.findFirst({ where: { jbpId: jbp.id } }),
+      ]);
+
+    // 3) CAMPANHA DE MARKETING (Calendário)
+    let campanha = campanhaExistente;
+    if (!campanha) {
+      campanha = await prisma.TBLCAMPANHA.create({
+        data: {
+          supplierId: jbp.supplierId,
+          jbpId: jbp.id,
+          name: jbp.name || "Campanha vinculada ao JBP",
+          objective:
+            jbp.strategy ||
+            "Campanha criada automaticamente a partir do JBP.",
+          channel: "MULTICANAL",
+          startDate: jbp.periodStart,
+          endDate: jbp.periodEnd,
+          status: "planejada",
+        },
+      });
+
+      // Itens da campanha: uma peça por item do JBP
+      if (jbp.itens.length > 0) {
+        const campanhaItensData = jbp.itens.map((it) => ({
+          campanhaId: campanha.id,
+          jbpItemId: it.id,
+          assetId: it.assetId,
+          title: it.description || it.asset?.name || "Peça vinculada ao JBP",
+          contentType: it.asset?.type || null,
+          artDeadline: it.periodStart || null,
+          approvalDeadline: it.periodStart || null,
+          goLiveDate: it.periodStart || null,
+          urlDestino: null,
+          notes: it.notes || null,
+        }));
+
+        if (campanhaItensData.length > 0) {
+          await prisma.TBLCAMPANHAITEM.createMany({
+            data: campanhaItensData,
+          });
+        }
+      }
+    }
+
+    // 4) EXECUÇÃO EM LOJA
+    const itensLoja = jbp.itens.filter(
+      (it) => it.asset?.channel === "LOJA_FISICA"
+    );
+
+    let execPlano = execPlanoExistente;
+    if (!execPlano && itensLoja.length > 0) {
+      execPlano = await prisma.TBLEXECPLANO.create({
+        data: {
+          supplierId: jbp.supplierId,
+          jbpId: jbp.id,
+          name: `Execução em Loja - ${jbp.name}`,
+          periodStart: jbp.periodStart,
+          periodEnd: jbp.periodEnd,
+          status: "planejado",
+        },
+      });
+
+      const tarefasData = itensLoja.map((it) => ({
+        planoExecId: execPlano.id,
+        jbpItemId: it.id,
+        assetId: it.assetId,
+        storeScope: it.storeScope || "Todas as lojas",
+        checklist: null,
+        deadline: it.periodStart || null,
+        status: "pendente",
+        photoUrl: null,
+        notes: it.notes || null,
+      }));
+
+      if (tarefasData.length > 0) {
+        await prisma.TBLEXECTAREFA.createMany({
+          data: tarefasData,
+        });
+      }
+    }
+
+    // 5) RETAIL MEDIA (E-commerce / App)
+    const itensDigital = jbp.itens.filter(
+      (it) =>
+        it.asset?.channel === "ECOMMERCE" || it.asset?.channel === "APP"
+    );
+
+    let retailPlano = retailPlanoExistente;
+    if (!retailPlano && itensDigital.length > 0) {
+      const canalPlano =
+        itensDigital.some((it) => it.asset?.channel === "APP") &&
+        itensDigital.some((it) => it.asset?.channel === "ECOMMERCE")
+          ? "MULTICANAL"
+          : itensDigital[0].asset.channel || "ECOMMERCE";
+
+      retailPlano = await prisma.TBLRETAILMEDIA_PLANO.create({
+        data: {
+          supplierId: jbp.supplierId,
+          jbpId: jbp.id,
+          name: `Retail Media - ${jbp.name}`,
+          channel: canalPlano,
+          periodStart: jbp.periodStart,
+          periodEnd: jbp.periodEnd,
+          status: "planejado",
+        },
+      });
+
+      const retailData = itensDigital.map((it) => ({
+        planoRetailId: retailPlano.id,
+        jbpItemId: it.id,
+        assetId: it.assetId,
+        pageType: null,
+        position: null,
+        device: "ambos",
+        impressionsTarget: null,
+        clicksTarget: null,
+        cpcNegociado: it.negotiatedUnitPrice || null,
+        totalValue: it.totalValue || null,
+        notes: it.notes || null,
+      }));
+
+      if (retailData.length > 0) {
+        await prisma.TBLRETAILMEDIA_ITEM.createMany({
+          data: retailData,
+        });
+      }
+    }
+
+    return res.json({
+      message: "Contrato gerado / sincronizado com sucesso.",
+      jbpId: jbp.id,
+      campanhaId: campanha?.id || null,
+      execPlanoId: execPlano?.id || null,
+      retailPlanoId: retailPlano?.id || null,
+      resumo: {
+        totalItensJbp: jbp.itens.length,
+        itensLoja: itensLoja.length,
+        itensDigital: itensDigital.length,
+      },
+    });
+  } catch (error) {
+    console.error("Erro ao gerar contrato a partir do JBP:", error);
+    return res
+      .status(500)
+      .json({ message: "Erro ao gerar contrato a partir do JBP." });
+  }
+});
+
+module.exports = router;
