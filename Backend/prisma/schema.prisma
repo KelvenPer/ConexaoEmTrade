@@ -116,12 +116,15 @@ model TBLCAMPANHAITEM {
   jbpItemId        Int?
   assetId          Int
   title            String?
-  contentType      String? // banner, video, push, post, etc.
+  contentType      String?   // banner, video, push, post, etc.
   artDeadline      DateTime?
   approvalDeadline DateTime?
   goLiveDate       DateTime?
   urlDestino       String?
   notes            String?
+
+  creativeUrl      String?   // link da arte (Canva, Figma, Drive, imagem…)
+  approvalStatus   String    @default("rascunho") 
 
   campanha TBLCAMPANHA @relation(fields: [campanhaId], references: [id])
   jbpItem  TBLJBPITEM? @relation(fields: [jbpItemId], references: [id])

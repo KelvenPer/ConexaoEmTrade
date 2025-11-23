@@ -58,6 +58,93 @@ router.get("/", async (req, res) => {
   }
 });
 
+// GET /api/campanhas/calendar
+// Retorna campanhas com peças aprovadas dentro de um período
+router.get("/calendar", async (req, res) => {
+  try {
+    const { start, end, supplierId } = req.query;
+
+    // Período padrão: do 1º dia do mês atual até +60 dias
+    const now = new Date();
+    const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const defaultEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0); // fim do mês +2
+
+    const startDate = start ? new Date(start) : defaultStart;
+    const endDate = end ? new Date(end) : defaultEnd;
+
+    const where = {
+      ...(supplierId ? { supplierId: Number(supplierId) || undefined } : {}),
+      itens: {
+        some: {
+          approvalStatus: "aprovado",
+          goLiveDate: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+      },
+    };
+
+    const campanhas = await prisma.TBLCAMPANHA.findMany({
+      where,
+      orderBy: [{ startDate: "asc" }, { createdAt: "asc" }],
+      include: {
+        supplier: true,
+        itens: {
+          where: {
+            approvalStatus: "aprovado",
+            goLiveDate: {
+              gte: startDate,
+              lte: endDate,
+            },
+          },
+          include: {
+            asset: true,
+          },
+          orderBy: { goLiveDate: "asc" },
+        },
+      },
+    });
+
+    const result = campanhas.map((c) => ({
+      id: c.id,
+      name: c.name,
+      status: c.status,
+      supplierId: c.supplierId,
+      supplierName: c.supplier?.name || null,
+      channel: c.channel,
+      periodStart: c.startDate,
+      periodEnd: c.endDate,
+      items: c.itens.map((it) => ({
+        id: it.id,
+        title: it.title,
+        contentType: it.contentType,
+        approvalStatus: it.approvalStatus,
+        artDeadline: it.artDeadline,
+        approvalDeadline: it.approvalDeadline,
+        goLiveDate: it.goLiveDate,
+        creativeUrl: it.creativeUrl,
+        urlDestino: it.urlDestino,
+        notes: it.notes,
+        assetId: it.assetId,
+        assetName: it.asset?.name || null,
+        assetChannel: it.asset?.channel || null,
+      })),
+    }));
+
+    return res.json({
+      start: startDate.toISOString(),
+      end: endDate.toISOString(),
+      campanhas: result,
+    });
+  } catch (error) {
+    console.error("Erro ao carregar calendário de campanhas:", error);
+    return res
+      .status(500)
+      .json({ message: "Erro ao carregar calendário de campanhas." });
+  }
+});
+
 /**
  * GET /api/campanhas/:id
  * Detalhe de uma campanha + itens
@@ -115,12 +202,20 @@ router.post("/", async (req, res) => {
     if (!supplierId || !name) {
       return res
         .status(400)
-        .json({ message: "Fornecedor e nome da campanha são obrigatórios." });
+        .json({ message: "Fornecedor e nome da campanha sao obrigatorios." });
     }
 
     const sid = Number(supplierId);
     if (Number.isNaN(sid)) {
-      return res.status(400).json({ message: "Fornecedor inválido." });
+      return res.status(400).json({ message: "Fornecedor invalido." });
+    }
+
+    const fornecedor = await prisma.TBLFORN.findUnique({
+      where: { id: sid },
+      select: { id: true },
+    });
+    if (!fornecedor) {
+      return res.status(400).json({ message: "Fornecedor nao encontrado." });
     }
 
     const dataToCreate = {
@@ -133,9 +228,24 @@ router.post("/", async (req, res) => {
 
     if (jbpId) {
       const jid = Number(jbpId);
-      if (!Number.isNaN(jid)) {
-        dataToCreate.jbpId = jid;
+      if (Number.isNaN(jid)) {
+        return res.status(400).json({ message: "JBP invalido." });
       }
+
+      const jbp = await prisma.TBLJBP.findUnique({
+        where: { id: jid },
+        select: { id: true, supplierId: true },
+      });
+      if (!jbp) {
+        return res.status(400).json({ message: "JBP nao encontrado." });
+      }
+      if (jbp.supplierId !== sid) {
+        return res
+          .status(400)
+          .json({ message: "JBP informado nao pertence ao fornecedor." });
+      }
+
+      dataToCreate.jbpId = jid;
     }
 
     if (startDate) {
@@ -187,10 +297,24 @@ router.put("/:id", async (req, res) => {
     } = req.body;
 
     const dataToUpdate = {};
+    let supplierIdToUse = existente.supplierId;
 
     if (supplierId !== undefined) {
       const sid = Number(supplierId);
-      if (!Number.isNaN(sid)) dataToUpdate.supplierId = sid;
+      if (Number.isNaN(sid)) {
+        return res.status(400).json({ message: "Fornecedor invalido." });
+      }
+
+      const fornecedor = await prisma.TBLFORN.findUnique({
+        where: { id: sid },
+        select: { id: true },
+      });
+      if (!fornecedor) {
+        return res.status(400).json({ message: "Fornecedor nao encontrado." });
+      }
+
+      dataToUpdate.supplierId = sid;
+      supplierIdToUse = sid;
     }
 
     if (jbpId !== undefined) {
@@ -198,7 +322,24 @@ router.put("/:id", async (req, res) => {
         dataToUpdate.jbpId = null;
       } else {
         const jid = Number(jbpId);
-        if (!Number.isNaN(jid)) dataToUpdate.jbpId = jid;
+        if (Number.isNaN(jid)) {
+          return res.status(400).json({ message: "JBP invalido." });
+        }
+
+        const jbp = await prisma.TBLJBP.findUnique({
+          where: { id: jid },
+          select: { id: true, supplierId: true },
+        });
+        if (!jbp) {
+          return res.status(400).json({ message: "JBP nao encontrado." });
+        }
+        if (jbp.supplierId !== supplierIdToUse) {
+          return res
+            .status(400)
+            .json({ message: "JBP informado nao pertence ao fornecedor." });
+        }
+
+        dataToUpdate.jbpId = jid;
       }
     }
 
@@ -284,6 +425,9 @@ router.post("/:id/itens", async (req, res) => {
       goLiveDate,
       urlDestino,
       notes,
+      // NOVOS
+      creativeUrl,
+      approvalStatus,
     } = req.body;
 
     if (!assetId) {
@@ -302,6 +446,8 @@ router.post("/:id/itens", async (req, res) => {
       contentType: contentType || null,
       urlDestino: urlDestino || null,
       notes: notes || null,
+      creativeUrl: creativeUrl || null,
+      approvalStatus: approvalStatus || "rascunho",
     };
 
     if (jbpItemId) {
@@ -364,6 +510,9 @@ router.put("/itens/:itemId", async (req, res) => {
       goLiveDate,
       urlDestino,
       notes,
+      // NOVOS
+      creativeUrl,
+      approvalStatus,
     } = req.body;
 
     const dataToUpdate = {};
@@ -387,6 +536,12 @@ router.put("/itens/:itemId", async (req, res) => {
       dataToUpdate.contentType = contentType || null;
     if (urlDestino !== undefined) dataToUpdate.urlDestino = urlDestino || null;
     if (notes !== undefined) dataToUpdate.notes = notes || null;
+    if (creativeUrl !== undefined) {
+      dataToUpdate.creativeUrl = creativeUrl || null;
+    }
+    if (approvalStatus !== undefined) {
+      dataToUpdate.approvalStatus = approvalStatus;
+    }
 
     if (artDeadline !== undefined) {
       if (!artDeadline) {
