@@ -1,224 +1,157 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  Settings2,
+  Users,
+  Factory,
+  Boxes,
+  Megaphone,
+  CalendarDays,
+  LineChart,
+} from "lucide-react";
+import type { ReactNode } from "react";
 
-export default function PainelLayout({ children }: { children: React.ReactNode }) {
+type LayoutProps = {
+  children: ReactNode;
+};
+
+export default function PainelLayout({ children }: LayoutProps) {
   const pathname = usePathname();
-  const router = useRouter();
-
-  // Futuro: validar token aqui e redirecionar se não estiver logado
-  useEffect(() => {
-    // const token = localStorage.getItem("conexao_trade_token");
-    // if (!token) router.push("/login");
-  }, [router]);
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        backgroundColor: "#f3f4f6",
-        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-      }}
-    >
-      {/* Sidebar */}
-      <aside
-        style={{
-          width: 260,
-          backgroundColor: "#020617",
-          color: "#e5e7eb",
-          padding: "16px 12px",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div
-          style={{
-            padding: "8px 10px 16px",
-            borderBottom: "1px solid rgba(148, 163, 184, 0.15)",
-            marginBottom: 12,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 16,
-              fontWeight: 700,
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-            }}
-          >
-            Conexão em Trade
-          </div>
-          <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>
-            Painel de Trade Marketing &amp; Dados
+    <div className="app-shell">
+      {/* SIDEBAR */}
+      <aside className="app-shell__sidebar">
+        <div className="app-shell__sidebar-header">
+          <div className="app-shell__sidebar-header-logo">CT</div>
+          <div className="app-shell__sidebar-header-title">
+            <span className="app-shell__sidebar-header-title-main">
+              Conexão em Trade
+            </span>
+            <span className="app-shell__sidebar-header-title-sub">
+              Painel de Trade Marketing &amp; Dados
+            </span>
           </div>
         </div>
 
-        <nav
-          style={{
-            flex: 1,
-            overflowY: "auto",
-            paddingRight: 4,
-            fontSize: 13,
-          }}
-        >
-          <Section title="Principal">
-            <NavItem href="/painel" pathname={pathname}>
+        <nav className="app-shell__sidebar-nav">
+          <NavGroup title="Principal">
+            <NavItem
+              href="/painel"
+              pathname={pathname}
+              icon={<LayoutDashboard size={16} />}
+            >
               Dashboard Geral
             </NavItem>
-          </Section>
+          </NavGroup>
 
-          <Section title="Trade Marketing">
-            <NavItem href="/painel/trade" pathname={pathname}>
-              Painel de Trade
-            </NavItem>
-            <NavItem href="/painel/trade/jbp-jvc" pathname={pathname}>
+          <NavGroup title="Trade Marketing">
+            <NavItem
+              href="/painel/trade/jbp-jvc"
+              pathname={pathname}
+              icon={<Boxes size={16} />}
+            >
               JBP &amp; JVC
             </NavItem>
-            <NavItem href="/painel/trade/execucao" pathname={pathname}>
-              Execução em Loja
-            </NavItem>
-            <NavItem href="/painel/trade/retail-media" pathname={pathname}>
-              Retail Media
-            </NavItem>
-          </Section>
+          </NavGroup>
 
-          <Section title="Marketing">
-            <NavItem href="/painel/marketing/calendario" pathname={pathname}>
-              Calendário de Campanhas
+          <NavGroup title="Marketing">
+            <NavItem
+              href="/painel/marketing/calendario"
+              pathname={pathname}
+              icon={<CalendarDays size={16} />}
+            >
+              Calendário de campanhas
             </NavItem>
-            <NavItem href="/painel/marketing/campanhas" pathname={pathname}>
-              Campanhas &amp; Conteúdo
+            <NavItem
+              href="/painel/marketing/campanhas"
+              pathname={pathname}
+              icon={<Megaphone size={16} />}
+            >
+              Campanhas &amp; conteúdo
             </NavItem>
-            <NavItem href="/painel/marketing/resultados" pathname={pathname}>
-              Resultados de Campanha
+            <NavItem
+              href="/painel/marketing/resultados"
+              pathname={pathname}
+              icon={<LineChart size={16} />}
+            >
+              Resultados de campanha
             </NavItem>
-          </Section>
+          </NavGroup>
 
-          <Section title="Indústria">
-            <NavItem href="/painel/industria/parceiros" pathname={pathname}>
-              Parceiros &amp; Contas
-            </NavItem>
-            <NavItem href="/painel/industria/visao-fornecedor" pathname={pathname}>
-              Visão por Fornecedor
-            </NavItem>
-            <NavItem href="/painel/industria/acordos" pathname={pathname}>
-              Acordos Comerciais
-            </NavItem>
-          </Section>
-
-          <Section title="Área de Dados">
-            <NavItem href="/painel/dados/sql-lab" pathname={pathname}>
-              SQL Lab / Relatórios
-            </NavItem>
-            <NavItem href="/painel/dados/bi" pathname={pathname}>
-              Painéis de BI
-            </NavItem>
-          </Section>
-
-          <Section title="Configurações">
-            <NavItem href="/painel/config/usuarios" pathname={pathname}>
+          <NavGroup title="Configurações">
+            <NavItem
+              href="/painel/config/usuarios"
+              pathname={pathname}
+              icon={<Users size={16} />}
+            >
               Usuários
             </NavItem>
-            <NavItem href="/painel/config/fornecedores" pathname={pathname}>
+            <NavItem
+              href="/painel/config/fornecedores"
+              pathname={pathname}
+              icon={<Factory size={16} />}
+            >
               Fornecedores
             </NavItem>
-            <NavItem href="/painel/config/ativos" pathname={pathname}>
-              Ativos
+            <NavItem
+              href="/painel/config/ativos"
+              pathname={pathname}
+              icon={<Settings2 size={16} />}
+            >
+              Ativos de mídia
             </NavItem>
-          </Section>
+          </NavGroup>
         </nav>
 
-        <div
-          style={{
-            paddingTop: 8,
-            borderTop: "1px solid rgba(148, 163, 184, 0.15)",
-            marginTop: 8,
-            fontSize: 11,
-            color: "#9ca3af",
-          }}
-        >
-          <div>Portfólio • Kelven Silva</div>
+        <div className="app-shell__sidebar-footer">
+          <div>Conexão em Trade · v0.1</div>
+          <div>Ambiente de demonstração</div>
         </div>
       </aside>
 
-      {/* Área principal */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        {/* Top bar */}
-        <header
-          style={{
-            height: 56,
-            backgroundColor: "#ffffff",
-            borderBottom: "1px solid #e5e7eb",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "0 20px",
-          }}
-        >
-          <div style={{ fontSize: 14, color: "#4b5563" }}>
-            Visão de Portfólio • Ambiente de demonstração
+      {/* MAIN AREA */}
+      <div className="app-shell__main">
+        <header className="app-shell__topbar">
+          <div className="app-shell__topbar-left">
+            <div className="app-shell__topbar-title">Visão de Portfólio</div>
+            <div className="app-shell__topbar-sub">
+              Acompanhe JBP, campanhas, execução em loja e resultados em uma
+              visão única.
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              // Futuro: limpar tokens antes de sair
-              // localStorage.removeItem("conexao_trade_token");
-              // localStorage.removeItem("conexao_trade_user");
-              router.push("/login");
-            }}
-            style={{
-              fontSize: 12,
-              borderRadius: 999,
-              border: "1px solid #e5e7eb",
-              padding: "6px 12px",
-              backgroundColor: "#ffffff",
-              color: "#374151",
-              cursor: "pointer",
-            }}
-          >
-            Sair
-          </button>
+
+          <div className="app-shell__topbar-right">
+            <span className="app-shell__env-tag">
+              • Ambiente de demonstração
+            </span>
+            <button type="button" className="app-shell__primary-cta">
+              + Nova campanha
+            </button>
+            <div className="app-shell__user-chip">KS</div>
+          </div>
         </header>
 
-        {/* Conteúdo */}
-        <main
-          style={{
-            flex: 1,
-            padding: 24,
-          }}
-        >
-          {children}
-        </main>
+        <main className="app-shell__content">{children}</main>
       </div>
     </div>
   );
 }
 
-function Section({
+function NavGroup({
   title,
   children,
 }: {
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      <div
-        style={{
-          fontSize: 10,
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
-          color: "#6b7280",
-          padding: "4px 8px",
-          marginBottom: 4,
-        }}
-      >
-        {title}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+    <div style={{ marginBottom: 8 }}>
+      <div className="app-shell__nav-group-title">{title}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {children}
       </div>
     </div>
@@ -228,29 +161,27 @@ function Section({
 function NavItem({
   href,
   pathname,
+  icon,
   children,
 }: {
   href: string;
   pathname: string | null;
-  children: React.ReactNode;
+  icon?: ReactNode;
+  children: ReactNode;
 }) {
-  const isActive = pathname === href;
+  const isActive =
+    pathname === href || (pathname || "").startsWith(href + "/");
 
   return (
     <Link
       href={href}
-      style={{
-        padding: "6px 10px",
-        borderRadius: 8,
-        textDecoration: "none",
-        fontSize: 12,
-        color: isActive ? "#0f172a" : "#e5e7eb",
-        backgroundColor: isActive ? "#e5e7eb" : "transparent",
-        display: "block",
-      }}
+      className={
+        "app-shell__nav-item" +
+        (isActive ? " app-shell__nav-item--active" : "")
+      }
     >
-      {children}
+      {icon && <span className="app-shell__nav-item-icon">{icon}</span>}
+      <span className="app-shell__nav-label">{children}</span>
     </Link>
   );
 }
-

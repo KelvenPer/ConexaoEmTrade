@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 
 type CalendarItem = {
   id: number;
@@ -43,6 +43,9 @@ type ApiCalendarResponse = {
   campanhas: CalendarCampaign[];
 };
 
+const DAY_NAMES_SHORT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
+const PAGE_DAYS = 7; // agrupamos por semana para paginar o calendário
+
 function dateDiffDays(a: Date, b: Date) {
   return (b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24);
 }
@@ -61,77 +64,50 @@ function toInputDate(d: Date) {
   return `${year}-${month}-${day}`;
 }
 
-const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-
-function formatMonthRange(days: Date[]) {
-  if (!days.length) return "";
-  const first = days[0];
-  const last = days[days.length - 1];
-  const opts: Intl.DateTimeFormatOptions = {
-    month: "short",
-    year: "numeric",
-  };
-  const a = first.toLocaleDateString("pt-BR", opts);
-  const b = last.toLocaleDateString("pt-BR", opts);
-  return a === b ? a : `${a} · ${b}`;
+function buildDayArray(start: Date, end: Date): Date[] {
+  const days: Date[] = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    days.push(new Date(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return days;
 }
 
-function getBarColor(channel: string | null) {
-  switch (channel) {
-    case "LOJA_FISICA":
-      return "#fef3c7"; // amarelo suave
-    case "ECOMMERCE":
-      return "#dbeafe"; // azul
-    case "APP":
-      return "#dcfce7"; // verde
-    case "MULTICANAL":
-      return "#fee2e2"; // vermelho claro
-    default:
-      return "#e5e7eb"; // cinza
-  }
+function formatMonthRangeLabel(start: Date | null, end: Date | null) {
+  if (!start || !end) return "";
+  const opts: Intl.DateTimeFormatOptions = { month: "short", year: "numeric" };
+  const s = start.toLocaleDateString("pt-BR", opts);
+  const e = end.toLocaleDateString("pt-BR", opts);
+  return s === e ? s : `${s} - ${e}`;
 }
 
-// calcula em quais colunas do grid a barra começa/termina
-function getBarSpan(
-  startStr: string | null,
-  endStr: string | null,
-  rangeStart: Date,
-  totalDays: number
-): { startCol: number; endCol: number } | null {
-  if (!startStr && !endStr) return null;
-
-  let startDate: Date | null = null;
-  let endDate: Date | null = null;
-
-  if (startStr) {
-    const d = new Date(startStr);
-    if (!Number.isNaN(d.getTime())) startDate = d;
-  }
-
-  if (endStr) {
-    const d = new Date(endStr);
-    if (!Number.isNaN(d.getTime())) endDate = d;
-  }
-
-  // se só tiver uma das datas, considera 1 dia
-  if (!startDate && endDate) startDate = endDate;
-  if (!endDate && startDate) endDate = startDate;
-  if (!startDate || !endDate) return null;
-
-  let startIndex = Math.floor(dateDiffDays(rangeStart, startDate));
-  let endIndex = Math.floor(dateDiffDays(rangeStart, endDate));
-
-  if (endIndex < 0 || startIndex > totalDays - 1) return null;
-
-  if (startIndex < 0) startIndex = 0;
-  if (endIndex > totalDays - 1) endIndex = totalDays - 1;
-  if (endIndex < startIndex) endIndex = startIndex;
-
-  return {
-    startCol: startIndex + 1,
-    endCol: endIndex + 2, // grid é exclusivo no fim
-  };
-}
+// paleta simples por status
+const STATUS_COLORS: Record<
+  string,
+  { bar: string; pillBg: string; pillText: string }
+> = {
+  aprovado: {
+    bar: "#22c55e",
+    pillBg: "#dcfce7",
+    pillText: "#166534",
+  },
+  em_producao: {
+    bar: "#6366f1",
+    pillBg: "#e0e7ff",
+    pillText: "#312e81",
+  },
+  planejada: {
+    bar: "#0ea5e9",
+    pillBg: "#e0f2fe",
+    pillText: "#075985",
+  },
+  encerrada: {
+    bar: "#9ca3af",
+    pillBg: "#e5e7eb",
+    pillText: "#111827",
+  },
+};
 
 export default function CalendarioCampanhasPage() {
   const apiBaseUrl =
@@ -146,24 +122,29 @@ export default function CalendarioCampanhasPage() {
   const [data, setData] = useState<CalendarCampaign[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [chunkIndex, setChunkIndex] = useState(0);
 
-  // Inicializa período padrão (1º dia do mês até +2 meses)
+  // periodo padrao: mes atual
   useEffect(() => {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    const end = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     setStartDate(toInputDate(start));
     setEndDate(toInputDate(end));
   }, []);
 
-  // Carregar fornecedores + calendário quando período estiver pronto
+  // carrega fornecedores + calendario quando as datas mudam
   useEffect(() => {
     if (!startDate || !endDate) return;
     carregarSuppliers();
     carregarCalendario();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate, supplierFilter]);
+
+  // quando o range muda, resetamos a página do calendário
+  useEffect(() => {
+    setChunkIndex(0);
+  }, [startDate, endDate]);
 
   async function carregarSuppliers() {
     try {
@@ -174,7 +155,7 @@ export default function CalendarioCampanhasPage() {
       }
       setSuppliers(data);
     } catch (err: any) {
-      console.warn("Erro ao carregar fornecedores:", err);
+      console.error(err);
     }
   }
 
@@ -194,157 +175,81 @@ export default function CalendarioCampanhasPage() {
       const json: ApiCalendarResponse | { message?: string } =
         await res.json();
 
-      if (!res.ok) {
-        // ex: ID inválido, etc
-        setData([]);
-        setErrorMsg((json as any).message || "Erro ao carregar calendário.");
-        return;
-      }
-
-      if (!("campanhas" in json)) {
-        // resposta inesperada, não quebra a tela
-        setData([]);
-        setErrorMsg("Resposta inesperada do servidor de calendário.");
-        return;
+      if (!res.ok || !("campanhas" in json)) {
+        throw new Error((json as any).message || "Erro ao carregar calendario.");
       }
 
       setData(json.campanhas);
     } catch (err: any) {
-      console.warn("Erro ao carregar calendário:", err);
-      setErrorMsg(err.message || "Erro ao carregar calendário.");
-      setData([]);
+      console.error(err);
+      setErrorMsg(err.message || "Erro ao carregar calendario.");
     } finally {
       setLoading(false);
     }
   }
 
-  // range de timeline
   const rangeStart = startDate ? new Date(startDate) : null;
   const rangeEnd = endDate ? new Date(endDate) : null;
 
-  const days: Date[] = [];
-  if (rangeStart && rangeEnd) {
-    const cursor = new Date(rangeStart);
-    while (cursor <= rangeEnd) {
-      days.push(new Date(cursor));
-      cursor.setDate(cursor.getDate() + 1);
-    }
+  const days =
+    rangeStart && rangeEnd ? buildDayArray(rangeStart, rangeEnd) : [];
+
+  // cria páginas (semanas) para o calendário
+  const dayChunks: Date[][] = [];
+  for (let i = 0; i < days.length; i += PAGE_DAYS) {
+    dayChunks.push(days.slice(i, i + PAGE_DAYS));
   }
 
-  // layout tipo planner: largura fixa por dia + scroll horizontal
-  const DAY_COL_WIDTH = 56; // px
-  const dayCount = days.length || 1;
-  const minWidth = 220 + dayCount * DAY_COL_WIDTH;
-  const gridTemplateAll = `220px repeat(${dayCount}, ${DAY_COL_WIDTH}px)`;
-  const gridTemplateDays = `repeat(${dayCount}, ${DAY_COL_WIDTH}px)`;
+  // garante que o índice atual nunca saia do limite quando o tamanho do range muda
+  useEffect(() => {
+    setChunkIndex((i) =>
+      i >= dayChunks.length ? Math.max(dayChunks.length - 1, 0) : i
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days.length]);
 
-  const totalRangeDays = days.length || 1;
+  const safeChunkIndex =
+    chunkIndex >= dayChunks.length ? Math.max(dayChunks.length - 1, 0) : chunkIndex;
+  const activeDays = dayChunks[safeChunkIndex] || [];
+  const chunkStart = activeDays[0] || null;
+  const chunkEnd = activeDays[activeDays.length - 1] || null;
 
-  function toggleExpanded(id: number) {
-    setExpandedId((prev) => (prev === id ? null : id));
-  }
+  const rangeLabel = formatMonthRangeLabel(rangeStart, rangeEnd);
 
   return (
-    <div
-      style={{
-        maxWidth: 1180,
-        margin: "0 auto",
-        display: "flex",
-        flexDirection: "column",
-        gap: 14,
-      }}
-    >
-      {/* Header + filtros */}
-      <section
-        style={{
-          backgroundColor: "#ffffff",
-          borderRadius: 12,
-          padding: 14,
-          boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
-          border: "1px solid #e5e7eb",
-          display: "flex",
-          flexDirection: "column",
-          gap: 10,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 12,
-            alignItems: "flex-start",
-          }}
-        >
+    <div className="calendar-page">
+      <section className="calendar-hero ct-card">
+        <div className="calendar-hero__top">
           <div>
-            <h1
-              style={{
-                fontSize: 18,
-                fontWeight: 700,
-                marginBottom: 4,
-                color: "#0f172a",
-              }}
-            >
-              Calendário de Campanhas
-            </h1>
-            <p
-              style={{
-                fontSize: 12,
-                color: "#6b7280",
-                maxWidth: 520,
-              }}
-            >
-              Visão macro das campanhas e peças aprovadas no tempo, por
-              fornecedor e canal. Cada barra representa uma peça creative
-              aprovada para veiculação.
+            <p className="calendar-eyebrow">Marketing / Calendario</p>
+            <h1 className="calendar-title">Calendario de campanhas</h1>
+            <p className="calendar-sub">
+              Visao macro das campanhas e pecas aprovadas no tempo, por
+              fornecedor e canal. Cada faixa abaixo e uma peca aprovada alinhada
+              ao periodo selecionado.
             </p>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-              alignItems: "flex-end",
-            }}
-          >
-            <span
-              style={{
-                fontSize: 11,
-                color: "#6b7280",
-              }}
-            >
-              {data.length} campanhas no período
-            </span>
+          <div className="calendar-hero__actions">
+            <div className="calendar-chip">
+              {rangeLabel || "Periodo customizado"}
+            </div>
             <button
               type="button"
               onClick={carregarCalendario}
-              style={{
-                borderRadius: 999,
-                border: "1px solid #e5e7eb",
-                padding: "4px 12px",
-                background: "#ffffff",
-                fontSize: 11,
-                cursor: "pointer",
-              }}
+              className="ct-btn-secondary"
             >
               Recarregar
             </button>
           </div>
         </div>
 
-        {/* filtros */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-            gap: 10,
-          }}
-        >
+        <div className="calendar-filters">
           <Field label="Fornecedor">
             <select
               value={supplierFilter}
               onChange={(e) => setSupplierFilter(e.target.value)}
-              style={inputStyle}
+              className="calendar-input"
             >
               <option value="">Todos</option>
               {suppliers.map((f) => (
@@ -355,412 +260,246 @@ export default function CalendarioCampanhasPage() {
             </select>
           </Field>
 
-          <Field label="Início do período">
+          <Field label="Inicio do periodo">
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              style={inputStyle}
+              className="calendar-input"
             />
           </Field>
 
-          <Field label="Fim do período">
+          <Field label="Fim do periodo">
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              style={inputStyle}
+              className="calendar-input"
             />
           </Field>
+
+          <div className="calendar-quickpills">
+            <span className="calendar-pill is-active">Todas</span>
+            <span className="calendar-pill">Ativas</span>
+            <span className="calendar-pill">Planejadas</span>
+          </div>
         </div>
 
-        {errorMsg && (
-          <div
-            style={{
-              fontSize: 12,
-              color: "#b91c1c",
-            }}
-          >
-            {errorMsg}
-          </div>
-        )}
+        {errorMsg && <div className="calendar-error">{errorMsg}</div>}
       </section>
 
-      {/* Grid principal: header da timeline + linhas de campanhas, todos dentro do mesmo scroll horizontal */}
-      <section
-        style={{
-          backgroundColor: "#ffffff",
-          borderRadius: 12,
-          padding: 14,
-          boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
-          border: "1px solid #e5e7eb",
-        }}
-      >
-        <div style={{ overflowX: "auto" }}>
-          <div style={{ minWidth }}>
-            {/* Cabeçalho timeline com dias */}
-            {days.length > 0 && (
-              <div style={{ marginBottom: 8 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    fontSize: 11,
-                    color: "#6b7280",
-                    marginBottom: 4,
-                  }}
+      <section className="calendar-board ct-card">
+        <div className="calendar-toolbar">
+          <div>
+            <div className="calendar-toolbar__title">Linha do tempo</div>
+            <div className="calendar-toolbar__muted">
+              {days.length > 0
+                ? `${days.length} dias em exibicao`
+                : "Defina o periodo para ver o calendario"}
+            </div>
+          </div>
+          <div className="calendar-toolbar__filters">
+            <span className="calendar-chip light">
+              {data.length} campanhas encontradas
+            </span>
+            <span className="calendar-pill">Semana</span>
+            <span className="calendar-pill is-active">Mes</span>
+            <span className="calendar-pill">Trim.</span>
+            {dayChunks.length > 1 && (
+              <div className="calendar-nav">
+                <button
+                  type="button"
+                  className="calendar-nav__btn"
+                  onClick={() => setChunkIndex((i) => Math.max(0, i - 1))}
+                  disabled={safeChunkIndex === 0}
                 >
-                  <span>{formatMonthRange(days)}</span>
-                  <span>{days.length} dias em exibição</span>
-                </div>
+                  ◀
+                </button>
+                <span className="calendar-nav__label">
+                  Pag {safeChunkIndex + 1}/{dayChunks.length}
+                </span>
+                <button
+                  type="button"
+                  className="calendar-nav__btn"
+                  onClick={() =>
+                    setChunkIndex((i) =>
+                      Math.min(dayChunks.length - 1, i + 1)
+                    )
+                  }
+                  disabled={safeChunkIndex === dayChunks.length - 1}
+                >
+                  ▶
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: gridTemplateAll,
-                    borderBottom: "1px solid #e5e7eb",
-                  }}
-                >
-                  <div />{/* coluna vazia para labels */}
-                  {days.map((d) => {
-                    const weekday = WEEKDAYS[d.getDay()];
-                    const dayNum = d.getDate();
-                    return (
-                      <div
-                        key={d.toISOString()}
-                        style={{
-                          textAlign: "center",
-                          fontSize: 10,
-                          paddingBottom: 4,
-                          paddingTop: 2,
-                          borderLeft: "1px solid #f3f4f6",
-                          color: "#6b7280",
-                        }}
-                      >
-                        <div>{weekday}</div>
-                        <div
-                          style={{
-                            fontWeight: 600,
-                            color: "#111827",
-                          }}
-                        >
-                          {String(dayNum).padStart(2, "0")}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+        <div className="calendar-scroll">
+          <div
+            className="calendar-grid"
+            style={
+              {
+                "--days-count": activeDays.length || 1,
+              } as React.CSSProperties
+            }
+          >
+            {activeDays.length > 0 && (
+              <div className="calendar-grid__header">
+                <div className="calendar-grid__spacer">Campanhas</div>
+                {activeDays.map((d) => {
+                  const dow = DAY_NAMES_SHORT[d.getDay()];
+                  const dayNum = d.getDate();
+                  return (
+                    <div
+                      key={d.toISOString()}
+                      className="calendar-grid__day"
+                    >
+                      <span className="calendar-grid__dow">{dow}</span>
+                      <span className="calendar-grid__number">
+                        {String(dayNum).padStart(2, "0")}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
             {loading ? (
-              <div style={{ fontSize: 12, color: "#6b7280" }}>
-                Carregando campanhas aprovadas...
-              </div>
+              <div className="calendar-empty">Carregando campanhas...</div>
             ) : data.length === 0 ? (
-              <div
-                style={{
-                  fontSize: 12,
-                  color: "#6b7280",
-                  paddingTop: 8,
-                }}
-              >
-                Nenhuma campanha com peças aprovadas nesse período. Ajuste o
-                filtro de datas ou aguarde novas aprovações.
+              <div className="calendar-empty">
+                Nenhuma campanha com pecas aprovadas nesse periodo. Ajuste as
+                datas ou aguarde novas aprovacoes.
               </div>
             ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 6,
-                }}
-              >
+              <div className="calendar-grid__body">
                 {data.map((c) => {
-                  const isExpanded = expandedId === c.id;
+                  const statusKey = (c.status || "").toLowerCase();
+                  const palette =
+                    STATUS_COLORS[statusKey] || STATUS_COLORS["planejada"];
+
+                  let bar:
+                    | { leftPct: number; widthPct: number }
+                    | null = null;
+
+                  if (chunkStart && chunkEnd && c.items.length > 0) {
+                    const dates: Date[] = [];
+
+                    if (c.periodStart) {
+                      const d = new Date(c.periodStart);
+                      !Number.isNaN(d.getTime()) && dates.push(d);
+                    }
+                    if (c.periodEnd) {
+                      const d = new Date(c.periodEnd);
+                      !Number.isNaN(d.getTime()) && dates.push(d);
+                    }
+
+                    c.items.forEach((it) => {
+                      const main =
+                        it.goLiveDate ||
+                        it.approvalDeadline ||
+                        it.artDeadline;
+                      if (main) {
+                        const d = new Date(main);
+                        !Number.isNaN(d.getTime()) && dates.push(d);
+                      }
+                    });
+
+                    if (dates.length > 0) {
+                      const min = new Date(
+                        Math.min(...dates.map((d) => d.getTime()))
+                      );
+                      const max = new Date(
+                        Math.max(...dates.map((d) => d.getTime()))
+                      );
+
+                      const startClip = min < chunkStart ? chunkStart : min;
+                      const endClip = max > chunkEnd ? chunkEnd : max;
+
+                      const chunkDuration = Math.max(
+                        1,
+                        dateDiffDays(chunkStart, chunkEnd)
+                      );
+                      const offsetDays = dateDiffDays(
+                        chunkStart,
+                        startClip
+                      );
+                      const durationDays = Math.max(
+                        1,
+                        dateDiffDays(startClip, endClip)
+                      );
+
+                      let leftPct = (offsetDays / chunkDuration) * 100;
+                      let widthPct = (durationDays / chunkDuration) * 100;
+
+                      if (leftPct < 0) leftPct = 0;
+                      if (leftPct > 100) leftPct = 100;
+                      if (leftPct + widthPct > 100) {
+                        widthPct = 100 - leftPct;
+                      }
+                      if (widthPct < 2) widthPct = 2;
+
+                      bar = { leftPct, widthPct };
+                    }
+                  }
+
                   const totalPecas = c.items.length;
 
                   return (
-                    <div key={c.id}>
-                      {/* Linha da campanha: label + faixa de dias com barras */}
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: gridTemplateAll,
-                          alignItems: "stretch",
-                          borderRadius: 8,
-                          border: "1px solid #e5e7eb",
-                          backgroundColor: isExpanded
-                            ? "#eff6ff"
-                            : "#f9fafb",
-                          cursor: "pointer",
-                        }}
-                        onClick={() => toggleExpanded(c.id)}
-                      >
-                        {/* Coluna de informações da campanha */}
-                        <div
-                          style={{
-                            padding: 8,
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 3,
-                            borderRight: "1px solid #e5e7eb",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              gap: 6,
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: 13,
-                                fontWeight: 600,
-                                color: "#0f172a",
-                              }}
-                            >
-                              {c.name}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: 10,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.08em",
-                                padding: "2px 8px",
-                                borderRadius: 999,
-                                backgroundColor: "#0f172a",
-                                color: "#e0f2fe",
-                              }}
-                            >
-                              {c.status || "aprovada"}
-                            </span>
-                          </div>
-
-                          <div
-                            style={{
-                              fontSize: 11,
-                              color: "#6b7280",
-                            }}
-                          >
-                            {c.supplierName ||
-                              "Fornecedor não informado"}{" "}
-                            • {c.channel || "Canal não definido"} •{" "}
-                            {totalPecas} peça
-                            {totalPecas === 1 ? "" : "s"}
-                          </div>
-
-                          <div
-                            style={{
-                              fontSize: 11,
-                              color: "#4b5563",
-                            }}
-                          >
-                            {formatDate(c.periodStart)} →{" "}
-                            {formatDate(c.periodEnd)}
-                          </div>
+                    <div key={c.id} className="calendar-row">
+                      <div className="calendar-row__meta">
+                        <div className="calendar-row__title">{c.name}</div>
+                        <div className="calendar-row__subtitle">
+                          {c.supplierName || "Fornecedor nao informado"} -{" "}
+                          {c.channel || "Canal nao definido"}
                         </div>
-
-                        {/* Coluna timeline: grid por dia + barras das peças */}
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: gridTemplateDays,
-                            position: "relative",
-                          }}
-                        >
-                          {/* linhas verticais leves */}
-                          {days.map((d) => (
-                            <div
-                              key={`col-${c.id}-${d.toISOString()}`}
-                              style={{
-                                borderLeft: "1px solid #f3f4f6",
-                              }}
-                            />
-                          ))}
-
-                          {/* barras das peças aprovadas */}
-                          {rangeStart &&
-                            c.items.map((it) => {
-                              const barSpan = getBarSpan(
-                                it.artDeadline || it.goLiveDate,
-                                it.goLiveDate || it.approvalDeadline,
-                                rangeStart,
-                                totalRangeDays
-                              );
-                              if (!barSpan) return null;
-
-                              const color = getBarColor(c.channel);
-
-                              return (
-                                <div
-                                  key={it.id}
-                                  title={
-                                    (it.title || "(sem título)") +
-                                    (it.goLiveDate
-                                      ? ` • Go live: ${formatDate(
-                                          it.goLiveDate
-                                        )}`
-                                      : "")
-                                  }
-                                  style={{
-                                    gridColumn: `${barSpan.startCol} / ${barSpan.endCol}`,
-                                    margin: "3px 2px",
-                                    padding: "2px 6px",
-                                    borderRadius: 999,
-                                    backgroundColor: color,
-                                    border: "1px solid #e5e7eb",
-                                    fontSize: 10,
-                                    whiteSpace: "nowrap",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    alignSelf: "center",
-                                  }}
-                                >
-                                  {it.title || "(sem título)"}
-                                </div>
-                              );
-                            })}
+                        <div className="calendar-row__tags">
+                          <span
+                            className="calendar-status"
+                            style={{
+                              backgroundColor: palette.pillBg,
+                              color: palette.pillText,
+                            }}
+                          >
+                            {c.status || "Planejada"}
+                          </span>
+                          <span className="calendar-meta">
+                            {totalPecas} peca{totalPecas === 1 ? "" : "s"}
+                          </span>
                         </div>
                       </div>
 
-                      {/* Escopo expandido com detalhes das peças aprovadas */}
-                      {isExpanded && (
-                        <div
-                          style={{
-                            marginTop: 4,
-                            marginBottom: 6,
-                            borderRadius: 8,
-                            border: "1px solid #e5e7eb",
-                            padding: 10,
-                            backgroundColor: "#f9fafb",
-                          }}
-                        >
-                          {c.items.length === 0 ? (
-                            <div
-                              style={{
-                                fontSize: 12,
-                                color: "#6b7280",
-                              }}
-                            >
-                              Nenhuma peça aprovada vinculada a esta
-                              campanha no período.
+                      <div className="calendar-row__track">
+                        {days.length > 0 && (
+                          <div className="calendar-row__grid">
+                            {days.map((d) => (
+                              <div
+                                key={`grid-${d.toISOString()}`}
+                                className="calendar-row__grid-cell"
+                              />
+                            ))}
+                          </div>
+                        )}
+
+                        {bar && (
+                          <div
+                            className="calendar-row__bar"
+                            style={{
+                              left: `${bar.leftPct}%`,
+                              width: `${bar.widthPct}%`,
+                              backgroundColor: palette.bar,
+                              boxShadow:
+                                "0 14px 28px rgba(15,23,42,0.18)",
+                            }}
+                          >
+                            <div className="calendar-row__bar-text">
+                              {formatDate(c.periodStart)} -{" "}
+                              {formatDate(c.periodEnd)}
                             </div>
-                          ) : (
-                            <div style={{ overflowX: "auto" }}>
-                              <table
-                                style={{
-                                  width: "100%",
-                                  borderCollapse: "collapse",
-                                  fontSize: 11,
-                                }}
-                              >
-                                <thead>
-                                  <tr
-                                    style={{
-                                      backgroundColor: "#eef2ff",
-                                      textAlign: "left",
-                                    }}
-                                  >
-                                    <Th>Peça</Th>
-                                    <Th>Ativo</Th>
-                                    <Th>Canal</Th>
-                                    <Th>Go live</Th>
-                                    <Th>Arte</Th>
-                                    <Th>Destino</Th>
-                                    <Th>Notas</Th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {c.items.map((it) => (
-                                    <tr
-                                      key={it.id}
-                                      style={{
-                                        borderBottom:
-                                          "1px solid #e5e7eb",
-                                      }}
-                                    >
-                                      <Td>
-                                        <div
-                                          style={{
-                                            display: "flex",
-                                            flexDirection:
-                                              "column",
-                                            gap: 2,
-                                          }}
-                                        >
-                                          <span>
-                                            {it.title ||
-                                              "(sem título)"}
-                                          </span>
-                                          <span
-                                            style={{
-                                              fontSize: 10,
-                                              color: "#6b7280",
-                                            }}
-                                          >
-                                            {it.contentType ||
-                                              "-"}
-                                          </span>
-                                        </div>
-                                      </Td>
-                                      <Td>{it.assetName || "-"}</Td>
-                                      <Td>
-                                        {it.assetChannel || "—"}
-                                      </Td>
-                                      <Td>
-                                        {formatDate(
-                                          it.goLiveDate
-                                        )}
-                                      </Td>
-                                      <Td>
-                                        {it.creativeUrl ? (
-                                          <a
-                                            href={it.creativeUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            style={{
-                                              fontSize: 10,
-                                              color: "#2563eb",
-                                              textDecoration:
-                                                "underline",
-                                            }}
-                                          >
-                                            Ver arte
-                                          </a>
-                                        ) : (
-                                          "-"
-                                        )}
-                                      </Td>
-                                      <Td>
-                                        {it.urlDestino ? (
-                                          <a
-                                            href={it.urlDestino}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            style={{
-                                              fontSize: 10,
-                                              color: "#2563eb",
-                                              textDecoration:
-                                                "underline",
-                                            }}
-                                          >
-                                            Link
-                                          </a>
-                                        ) : (
-                                          "-"
-                                        )}
-                                      </Td>
-                                      <Td>{it.notes || "-"}</Td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -781,53 +520,9 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label
-        style={{
-          fontSize: 11,
-          fontWeight: 500,
-          color: "#374151",
-        }}
-      >
-        {label}
-      </label>
+    <div className="calendar-field">
+      <label className="calendar-field__label">{label}</label>
       {children}
     </div>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  padding: "7px 9px",
-  borderRadius: 8,
-  border: "1px solid #d1d5db",
-  fontSize: 12,
-  outline: "none",
-};
-
-const Th = ({ children }: { children: React.ReactNode }) => (
-  <th
-    style={{
-      padding: "6px 8px",
-      fontWeight: 600,
-      fontSize: 10,
-      textTransform: "uppercase",
-      letterSpacing: "0.05em",
-      color: "#4b5563",
-      whiteSpace: "nowrap",
-    }}
-  >
-    {children}
-  </th>
-);
-
-const Td = ({ children }: { children: React.ReactNode }) => (
-  <td
-    style={{
-      padding: "6px 8px",
-      color: "#111827",
-      verticalAlign: "top",
-    }}
-  >
-    {children}
-  </td>
-);

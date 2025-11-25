@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 // ---------- Tipos base ----------
 type Supplier = {
@@ -72,7 +71,18 @@ function supplierLabel(s: Supplier): string {
   return s.name || s.nome || s.fantasia || `Fornecedor #${s.id}`;
 }
 
-// ---------- Página ----------
+const STATUS_STYLE: Record<
+  string,
+  { bg: string; text: string; softBg?: string }
+> = {
+  planejada: { bg: "#0ea5e9", text: "#f8fafc", softBg: "#e0f2fe" },
+  em_producao: { bg: "#6366f1", text: "#f8fafc", softBg: "#e0e7ff" },
+  aprovada: { bg: "#22c55e", text: "#f8fafc", softBg: "#dcfce7" },
+  veiculando: { bg: "#a855f7", text: "#f8fafc", softBg: "#f3e8ff" },
+  encerrada: { bg: "#9ca3af", text: "#0f172a", softBg: "#f3f4f6" },
+};
+
+// ---------- Pagina ----------
 export default function CampanhasConteudoPage() {
   // base
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -83,7 +93,7 @@ export default function CampanhasConteudoPage() {
   const [loadingList, setLoadingList] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  // seleção
+  // selecao
   const [selectedCampanhaId, setSelectedCampanhaId] = useState<
     number | null
   >(null);
@@ -115,9 +125,7 @@ export default function CampanhasConteudoPage() {
     approvalStatus: "rascunho",
   });
 
-  const [editingItemId, setEditingItemId] = useState<number | null>(
-    null
-  );
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
 
   // feedback
   const [savingHeader, setSavingHeader] = useState(false);
@@ -219,7 +227,7 @@ export default function CampanhasConteudoPage() {
     }
   }
 
-  // ---------- handlers de formulário ----------
+  // ---------- handlers de formulario ----------
   function handleHeaderChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) {
@@ -269,14 +277,14 @@ export default function CampanhasConteudoPage() {
     });
   }
 
-  // ---------- salvar cabeçalho ----------
+  // ---------- salvar cabecalho ----------
   async function handleSalvarHeader(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
 
     if (!headerForm.supplierId || !headerForm.name) {
-      setErrorMsg("Fornecedor e nome da campanha são obrigatórios.");
+      setErrorMsg("Fornecedor e nome da campanha sao obrigatorios.");
       return;
     }
 
@@ -319,10 +327,8 @@ export default function CampanhasConteudoPage() {
           : "Campanha criada com sucesso."
       );
 
-      // recarrega lista
       await carregarListaCampanhas();
 
-      // se for nova, já carregar o detalhe
       if (!selectedCampanhaId) {
         await carregarDetalheCampanha(data.id);
       }
@@ -341,11 +347,11 @@ export default function CampanhasConteudoPage() {
     setSuccessMsg("");
 
     if (!selectedCampanhaId) {
-      setErrorMsg("Salve a campanha antes de adicionar peças.");
+      setErrorMsg("Salve a campanha antes de adicionar pecas.");
       return;
     }
     if (!itemForm.assetId) {
-      setErrorMsg("Selecione um ativo para a peça.");
+      setErrorMsg("Selecione um ativo para a peca.");
       return;
     }
 
@@ -385,20 +391,20 @@ export default function CampanhasConteudoPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || "Erro ao salvar peça.");
+        throw new Error(data.message || "Erro ao salvar peca.");
       }
 
       setSuccessMsg(
         editingItemId
-          ? "Peça atualizada com sucesso."
-          : "Peça criada com sucesso."
+          ? "Peca atualizada com sucesso."
+          : "Peca criada com sucesso."
       );
 
       await carregarDetalheCampanha(selectedCampanhaId);
       resetItemForm();
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao salvar peça.");
+      setErrorMsg(err.message || "Erro ao salvar peca.");
     } finally {
       setSavingItem(false);
     }
@@ -425,7 +431,7 @@ export default function CampanhasConteudoPage() {
   }
 
   async function handleExcluirItem(itemId: number) {
-    if (!window.confirm("Deseja realmente excluir esta peça?")) return;
+    if (!window.confirm("Deseja realmente excluir esta peca?")) return;
 
     try {
       setErrorMsg("");
@@ -436,217 +442,108 @@ export default function CampanhasConteudoPage() {
       );
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || "Erro ao excluir peça.");
+        throw new Error(data.message || "Erro ao excluir peca.");
       }
 
-      setSuccessMsg("Peça excluída com sucesso.");
+      setSuccessMsg("Peca excluida com sucesso.");
       if (selectedCampanhaId) {
         await carregarDetalheCampanha(selectedCampanhaId);
       }
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao excluir peça.");
+      setErrorMsg(err.message || "Erro ao excluir peca.");
     }
   }
 
   const totalPecas = items.length;
 
+  const listaCampanhas = useMemo(() => {
+    return campanhas.map((c) => {
+      const qtdItens = c.itens?.length ?? 0;
+      const periodo = [c.startDate, c.endDate]
+        .map((d) => (d ? formatDateBR(d) : null))
+        .filter(Boolean)
+        .join(" - ");
+      return { ...c, qtdItens, periodo };
+    });
+  }, [campanhas]);
+
   // ---------- UI ----------
   return (
-    <div
-      style={{
-        maxWidth: 1180,
-        margin: "0 auto",
-        display: "grid",
-        gridTemplateColumns: "minmax(0, 0.9fr) minmax(0, 1.5fr)",
-        gap: 18,
-        alignItems: "flex-start",
-      }}
-    >
+    <div className="panel-grid">
       {/* COLUNA ESQUERDA: lista de campanhas */}
-      <section
-        style={{
-          backgroundColor: "#ffffff",
-          borderRadius: 12,
-          padding: 14,
-          boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
-          border: "1px solid #e5e7eb",
-        }}
-      >
-        <div
-          style={{
-            marginBottom: 8,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            gap: 8,
-          }}
-        >
+      <section className="panel-card panel-card--soft">
+        <header className="panel-card__header">
           <div>
-            <h1
-              style={{
-                fontSize: 18,
-                fontWeight: 700,
-                marginBottom: 4,
-                color: "#0f172a",
-              }}
-            >
-              Campanhas & Conteúdo
-            </h1>
-            <p
-              style={{
-                fontSize: 12,
-                color: "#6b7280",
-              }}
-            >
-              Área onde Marketing detalha as campanhas vindas dos JBPs,
-              cria peças, anexa artes (creatives) e envia para aprovação
-              do Trade. Apenas ações aprovadas aparecerão no Calendário de
-              Campanhas.
+            <p className="panel-eyebrow">Marketing / Campanhas</p>
+            <h1 className="panel-title">Campanhas & Conteudo</h1>
+            <p className="panel-sub">
+              Area onde Marketing detalha campanhas vindas dos JBPs, cria pecas,
+              anexa artes (creatives) e envia para aprovacao do Trade. Apenas
+              acoes aprovadas aparecem no Calendario de Campanhas.
             </p>
           </div>
-
           <button
             type="button"
             onClick={resetHeaderForm}
-            style={{
-              borderRadius: 999,
-              border: "1px solid #e5e7eb",
-              padding: "6px 12px",
-              background: "#ffffff",
-              fontSize: 12,
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
+            className="panel-ghost"
           >
             Nova campanha
           </button>
-        </div>
+        </header>
 
-        <div
-          style={{
-            marginBottom: 8,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          <span
-            style={{
-              fontSize: 11,
-              color: "#6b7280",
-            }}
-          >
-            Campanhas cadastradas
-          </span>
+        <div className="panel-toolbar">
+          <span className="panel-muted">Campanhas cadastradas</span>
           <button
             type="button"
             onClick={carregarListaCampanhas}
-            style={{
-              borderRadius: 999,
-              border: "1px solid #e5e7eb",
-              padding: "4px 10px",
-              background: "#ffffff",
-              fontSize: 11,
-              cursor: "pointer",
-            }}
+            className="panel-ghost"
           >
             Atualizar
           </button>
         </div>
 
         {loadingList || loadingBase ? (
-          <div style={{ fontSize: 12, color: "#6b7280" }}>
-            Carregando campanhas...
-          </div>
-        ) : campanhas.length === 0 ? (
-          <div style={{ fontSize: 12, color: "#6b7280" }}>
-            Nenhuma campanha cadastrada ainda. Clique em &quot;Nova
-            campanha&quot; para começar.
+          <div className="panel-muted">Carregando campanhas...</div>
+        ) : listaCampanhas.length === 0 ? (
+          <div className="panel-muted">
+            Nenhuma campanha cadastrada ainda. Clique em &quot;Nova campanha&quot;.
           </div>
         ) : (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-              maxHeight: 420,
-              overflowY: "auto",
-            }}
-          >
-            {campanhas.map((c) => {
+          <div className="panel-list">
+            {listaCampanhas.map((c) => {
               const isActive = selectedCampanhaId === c.id;
-              const qtdItens = c.itens?.length ?? 0;
-
-              const periodo = [
-                c.startDate ? formatDateBR(c.startDate) : null,
-                c.endDate ? formatDateBR(c.endDate) : null,
-              ]
-                .filter(Boolean)
-                .join(" → ");
+              const palette =
+                STATUS_STYLE[c.status?.toLowerCase()] || STATUS_STYLE.planejada;
 
               return (
                 <button
                   key={c.id}
                   type="button"
                   onClick={() => carregarDetalheCampanha(c.id)}
+                  className="panel-list__item"
                   style={{
-                    textAlign: "left",
-                    padding: 8,
-                    borderRadius: 10,
-                    border: "1px solid #e5e7eb",
-                    backgroundColor: isActive ? "#e0f2fe" : "#f9fafb",
-                    cursor: "pointer",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 2,
+                    backgroundColor: isActive ? palette.softBg || "#e0f2fe" : "",
                   }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
+                  <div className="panel-list__item-top">
+                    <span className="panel-list__item-title">{c.name}</span>
                     <span
+                      className="panel-badge"
                       style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: "#0f172a",
-                      }}
-                    >
-                      {c.name}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 10,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.08em",
-                        padding: "2px 8px",
-                        borderRadius: 999,
-                        backgroundColor: "#0f172a",
-                        color: "#e0f2fe",
+                        backgroundColor: palette.bg,
+                        color: palette.text,
                       }}
                     >
                       {c.status || "planejada"}
                     </span>
                   </div>
-
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: "#6b7280",
-                    }}
-                  >
+                  <div className="panel-list__item-sub">
                     {c.supplier
                       ? supplierLabel(c.supplier)
-                      : "Fornecedor não informado"}{" "}
-                    • {c.channel || "Canal não definido"}{" "}
-                    {periodo && `• ${periodo}`} • {qtdItens} peça
-                    {qtdItens === 1 ? "" : "s"}
+                      : "Fornecedor nao informado"} {""} {c.channel || "Canal nao definido"} {" "}
+                    {c.periodo} {c.qtdItens} peca
+                    {c.qtdItens === 1 ? "" : "s"}
                   </div>
                 </button>
               );
@@ -655,66 +552,31 @@ export default function CampanhasConteudoPage() {
         )}
       </section>
 
-      {/* COLUNA DIREITA: detalhe da campanha + peças */}
-      <section
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-        }}
-      >
-        {/* Cabeçalho da campanha */}
-        <section
-          style={{
-            backgroundColor: "#ffffff",
-            borderRadius: 12,
-            padding: 14,
-            boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
-            border: "1px solid #e5e7eb",
-          }}
-        >
-          <div
-            style={{
-              marginBottom: 8,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <h2
-              style={{
-                fontSize: 15,
-                fontWeight: 600,
-                color: "#0f172a",
-              }}
-            >
+      {/* COLUNA DIREITA: detalhe da campanha + pecas */}
+      <section className="panel-stack">
+        {/* Cabecalho da campanha */}
+        <section className="panel-card">
+          <div className="panel-card__header">
+            <h2 className="panel-title panel-title--sm">
               {selectedCampanhaId
                 ? "Editar campanha"
                 : "Nova campanha de marketing"}
             </h2>
-
             {loadingDetail && (
-              <span style={{ fontSize: 11, color: "#6b7280" }}>
-                Carregando detalhe...
-              </span>
+              <span className="panel-muted">Carregando detalhe...</span>
             )}
           </div>
 
           <form
             onSubmit={handleSalvarHeader}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: 10,
-            }}
+            className="panel-form panel-form--2"
           >
             <Field label="Fornecedor *">
               <select
                 name="supplierId"
                 value={headerForm.supplierId}
                 onChange={handleHeaderChange}
-                style={inputStyle}
+                className="panel-input"
               >
                 <option value="">Selecione</option>
                 {suppliers.map((f) => (
@@ -732,7 +594,7 @@ export default function CampanhasConteudoPage() {
                 value={headerForm.jbpId}
                 onChange={handleHeaderChange}
                 placeholder="ID do JBP"
-                style={inputStyle}
+                className="panel-input"
               />
             </Field>
 
@@ -742,8 +604,8 @@ export default function CampanhasConteudoPage() {
                 name="name"
                 value={headerForm.name}
                 onChange={handleHeaderChange}
-                placeholder="Ex.: Volta às Aulas 2025"
-                style={inputStyle}
+                placeholder="Ex.: Volta as Aulas 2025"
+                className="panel-input"
               />
             </Field>
 
@@ -752,23 +614,23 @@ export default function CampanhasConteudoPage() {
                 name="channel"
                 value={headerForm.channel}
                 onChange={handleHeaderChange}
-                style={inputStyle}
+                className="panel-input"
               >
                 <option value="">Selecione</option>
-                <option value="LOJA_FISICA">Loja física</option>
+                <option value="LOJA_FISICA">Loja fisica</option>
                 <option value="ECOMMERCE">E-commerce</option>
                 <option value="APP">App</option>
                 <option value="MULTICANAL">Multicanal</option>
               </select>
             </Field>
 
-            <Field label="Início">
+            <Field label="Inicio">
               <input
                 type="date"
                 name="startDate"
                 value={headerForm.startDate}
                 onChange={handleHeaderChange}
-                style={inputStyle}
+                className="panel-input"
               />
             </Field>
 
@@ -778,7 +640,7 @@ export default function CampanhasConteudoPage() {
                 name="endDate"
                 value={headerForm.endDate}
                 onChange={handleHeaderChange}
-                style={inputStyle}
+                className="panel-input"
               />
             </Field>
 
@@ -787,73 +649,45 @@ export default function CampanhasConteudoPage() {
                 name="status"
                 value={headerForm.status}
                 onChange={handleHeaderChange}
-                style={inputStyle}
+                className="panel-input"
               >
                 <option value="planejada">Planejada</option>
-                <option value="em_producao">Em produção</option>
+                <option value="em_producao">Em producao</option>
                 <option value="aprovada">Aprovada</option>
                 <option value="veiculando">Veiculando</option>
                 <option value="encerrada">Encerrada</option>
               </select>
             </Field>
 
-            <div style={{ gridColumn: "1 / -1" }}>
+            <div className="panel-form__full">
               <Field label="Objetivo">
                 <textarea
                   name="objective"
                   value={headerForm.objective}
                   onChange={handleHeaderChange}
                   rows={2}
+                  className="panel-input panel-textarea"
                   placeholder="Ex.: aumentar sell-out em 10% na categoria, crescer base de clientes no app..."
-                  style={{ ...inputStyle, resize: "vertical" }}
                 />
               </Field>
             </div>
 
             {errorMsg && (
-              <div
-                style={{
-                  gridColumn: "1 / -1",
-                  fontSize: 12,
-                  color: "#b91c1c",
-                }}
-              >
+              <div className="panel-feedback panel-feedback--error">
                 {errorMsg}
               </div>
             )}
             {successMsg && (
-              <div
-                style={{
-                  gridColumn: "1 / -1",
-                  fontSize: 12,
-                  color: "#15803d",
-                }}
-              >
+              <div className="panel-feedback panel-feedback--success">
                 {successMsg}
               </div>
             )}
 
-            <div
-              style={{
-                gridColumn: "1 / -1",
-                display: "flex",
-                justifyContent: "flex-end",
-                marginTop: 4,
-              }}
-            >
+            <div className="panel-actions panel-actions--end panel-form__full">
               <button
                 type="submit"
                 disabled={savingHeader}
-                style={{
-                  padding: "8px 16px",
-                  borderRadius: 999,
-                  border: "none",
-                  backgroundColor: "#0f172a",
-                  color: "#ffffff",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: savingHeader ? "not-allowed" : "pointer",
-                }}
+                className="ct-btn-primary"
               >
                 {savingHeader
                   ? "Salvando..."
@@ -865,60 +699,32 @@ export default function CampanhasConteudoPage() {
           </form>
         </section>
 
-        {/* Peças & entregas */}
-        <section
-          style={{
-            backgroundColor: "#ffffff",
-            borderRadius: 12,
-            padding: 14,
-            boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
-            border: "1px solid #e5e7eb",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 8,
-              gap: 8,
-            }}
-          >
-            <h2
-              style={{
-                fontSize: 14,
-                fontWeight: 600,
-                color: "#0f172a",
-              }}
-            >
-              Peças & entregas da campanha
-            </h2>
-
-            <span
-              style={{
-                fontSize: 11,
-                color: "#6b7280",
-              }}
-            >
-              {totalPecas} peça{totalPecas === 1 ? "" : "s"}
+        {/* Pecas & entregas */}
+        <section className="panel-card">
+          <div className="panel-card__header">
+            <div>
+              <h2 className="panel-title panel-title--sm">
+                Pecas & entregas da campanha
+              </h2>
+              <p className="panel-muted">
+                Cadastre as pecas aprovadas, prazos e links de arte/destino.
+              </p>
+            </div>
+            <span className="panel-pill">
+              {totalPecas} peca{totalPecas === 1 ? "" : "s"}
             </span>
           </div>
 
           <form
             onSubmit={handleSalvarItem}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-              gap: 10,
-              marginBottom: 12,
-            }}
+            className="panel-form panel-form--4 panel-form--tight"
           >
             <Field label="Ativo *">
               <select
                 name="assetId"
                 value={itemForm.assetId}
                 onChange={handleItemChange}
-                style={inputStyle}
+                className="panel-input"
               >
                 <option value="">Selecione</option>
                 {ativos.map((a) => (
@@ -929,25 +735,25 @@ export default function CampanhasConteudoPage() {
               </select>
             </Field>
 
-            <Field label="Título da peça">
+            <Field label="Titulo da peca">
               <input
                 type="text"
                 name="title"
                 value={itemForm.title}
                 onChange={handleItemChange}
                 placeholder="Ex.: Banner home 970x250"
-                style={inputStyle}
+                className="panel-input"
               />
             </Field>
 
-            <Field label="Tipo de conteúdo">
+            <Field label="Tipo de conteudo">
               <input
                 type="text"
                 name="contentType"
                 value={itemForm.contentType}
                 onChange={handleItemChange}
-                placeholder="banner, vídeo, push..."
-                style={inputStyle}
+                placeholder="banner, video, push..."
+                className="panel-input"
               />
             </Field>
 
@@ -958,7 +764,7 @@ export default function CampanhasConteudoPage() {
                 value={itemForm.jbpItemId}
                 onChange={handleItemChange}
                 placeholder="ID do item no JBP"
-                style={inputStyle}
+                className="panel-input"
               />
             </Field>
 
@@ -968,27 +774,27 @@ export default function CampanhasConteudoPage() {
                 name="artDeadline"
                 value={itemForm.artDeadline}
                 onChange={handleItemChange}
-                style={inputStyle}
+                className="panel-input"
               />
             </Field>
 
-            <Field label="Prazo aprovação">
+            <Field label="Prazo aprovacao">
               <input
                 type="date"
                 name="approvalDeadline"
                 value={itemForm.approvalDeadline}
                 onChange={handleItemChange}
-                style={inputStyle}
+                className="panel-input"
               />
             </Field>
 
-            <Field label="Data veiculação (go live)">
+            <Field label="Data veiculacao (go live)">
               <input
                 type="date"
                 name="goLiveDate"
                 value={itemForm.goLiveDate}
                 onChange={handleItemChange}
-                style={inputStyle}
+                className="panel-input"
               />
             </Field>
 
@@ -999,11 +805,11 @@ export default function CampanhasConteudoPage() {
                 value={itemForm.urlDestino}
                 onChange={handleItemChange}
                 placeholder="https://..."
-                style={inputStyle}
+                className="panel-input"
               />
             </Field>
 
-            <div style={{ gridColumn: "1 / 3" }}>
+            <div className="panel-form__span2">
               <Field label="Link da arte (creative)">
                 <input
                   type="text"
@@ -1011,18 +817,18 @@ export default function CampanhasConteudoPage() {
                   value={itemForm.creativeUrl}
                   onChange={handleItemChange}
                   placeholder="Link para a arte (Canva, Figma, imagem...)"
-                  style={inputStyle}
+                  className="panel-input"
                 />
               </Field>
             </div>
 
-            <div style={{ gridColumn: "3 / -1" }}>
-              <Field label="Status de aprovação">
+            <div className="panel-form__span2">
+              <Field label="Status de aprovacao">
                 <select
                   name="approvalStatus"
                   value={itemForm.approvalStatus}
                   onChange={handleItemChange}
-                  style={inputStyle}
+                  className="panel-input"
                 >
                   <option value="rascunho">Rascunho</option>
                   <option value="pendente_trade">Pendente Trade</option>
@@ -1032,132 +838,80 @@ export default function CampanhasConteudoPage() {
               </Field>
             </div>
 
-            <div style={{ gridColumn: "1 / -1" }}>
+            <div className="panel-form__full">
               <Field label="Notas">
                 <textarea
                   name="notes"
                   value={itemForm.notes}
                   onChange={handleItemChange}
                   rows={2}
-                  style={{ ...inputStyle, resize: "vertical" }}
+                  className="panel-input panel-textarea"
                 />
               </Field>
             </div>
 
-            <div
-              style={{
-                gridColumn: "1 / -1",
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 8,
-              }}
-            >
+            <div className="panel-actions panel-actions--end panel-form__full">
               {editingItemId && (
                 <button
                   type="button"
                   onClick={resetItemForm}
-                  style={{
-                    borderRadius: 999,
-                    border: "1px solid #e5e7eb",
-                    padding: "7px 12px",
-                    background: "#ffffff",
-                    fontSize: 12,
-                    cursor: "pointer",
-                  }}
+                  className="panel-ghost"
                 >
-                  Cancelar edição
+                  Cancelar edicao
                 </button>
               )}
               <button
                 type="submit"
                 disabled={savingItem}
-                style={{
-                  padding: "7px 16px",
-                  borderRadius: 999,
-                  border: "none",
-                  backgroundColor: "#0f172a",
-                  color: "#ffffff",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: savingItem ? "not-allowed" : "pointer",
-                }}
+                className="ct-btn-primary"
               >
                 {savingItem
-                  ? "Salvando peça..."
+                  ? "Salvando peca..."
                   : editingItemId
-                  ? "Salvar peça"
-                  : "Adicionar peça"}
+                  ? "Salvar peca"
+                  : "Adicionar peca"}
               </button>
             </div>
           </form>
 
           {items.length === 0 ? (
-            <div style={{ fontSize: 12, color: "#6b7280" }}>
-              Nenhuma peça cadastrada ainda. Use o formulário acima para
+            <div className="panel-muted">
+              Nenhuma peca cadastrada ainda. Use o formulario acima para
               configurar as entregas da campanha.
             </div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  fontSize: 11,
-                }}
-              >
+            <div className="panel-table__wrap">
+              <table className="panel-table">
                 <thead>
-                  <tr
-                    style={{
-                      backgroundColor: "#f9fafb",
-                      textAlign: "left",
-                    }}
-                  >
-                    <Th>Peça</Th>
+                  <tr>
+                    <Th>Peca</Th>
                     <Th>Ativo</Th>
                     <Th>Canal</Th>
                     <Th>Go live</Th>
-                    <Th>Aprovação</Th>
+                    <Th>Aprovacao</Th>
                     <Th>Arte</Th>
                     <Th>Destino</Th>
-                    <Th>Ações</Th>
+                    <Th>Acoes</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((it) => (
-                    <tr
-                      key={it.id}
-                      style={{ borderBottom: "1px solid #e5e7eb" }}
-                    >
+                    <tr key={it.id}>
                       <Td>
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 2,
-                          }}
-                        >
-                          <span>{it.title || "(sem título)"}</span>
-                          <span
-                            style={{
-                              fontSize: 10,
-                              color: "#6b7280",
-                            }}
-                          >
+                        <div className="panel-table__cell">
+                          <span>{it.title || "(sem titulo)"}</span>
+                          <span className="panel-muted">
                             {it.contentType || "-"}
                           </span>
                         </div>
                       </Td>
-                      <Td>{it.asset?.name || `Ativo #${it.assetId}`}</Td>
+                      <Td>{it.asset?.name || "Ativo #"}</Td>
                       <Td>{it.asset?.channel || "-"}</Td>
                       <Td>{formatDateBR(it.goLiveDate)}</Td>
                       <Td>
                         <span
+                          className="panel-badge panel-badge--soft"
                           style={{
-                            fontSize: 10,
-                            padding: "2px 8px",
-                            borderRadius: 999,
-                            textTransform: "uppercase",
-                            letterSpacing: "0.06em",
                             backgroundColor:
                               it.approvalStatus === "aprovado"
                                 ? "#dcfce7"
@@ -1185,11 +939,7 @@ export default function CampanhasConteudoPage() {
                             href={it.creativeUrl}
                             target="_blank"
                             rel="noreferrer"
-                            style={{
-                              fontSize: 10,
-                              color: "#2563eb",
-                              textDecoration: "underline",
-                            }}
+                            className="panel-link"
                           >
                             Ver arte
                           </a>
@@ -1203,11 +953,7 @@ export default function CampanhasConteudoPage() {
                             href={it.urlDestino}
                             target="_blank"
                             rel="noreferrer"
-                            style={{
-                              fontSize: 10,
-                              color: "#2563eb",
-                              textDecoration: "underline",
-                            }}
+                            className="panel-link"
                           >
                             Link
                           </a>
@@ -1216,24 +962,18 @@ export default function CampanhasConteudoPage() {
                         )}
                       </Td>
                       <Td>
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 6,
-                            flexWrap: "wrap",
-                          }}
-                        >
+                        <div className="panel-actions panel-actions--inline">
                           <button
                             type="button"
                             onClick={() => handleEditarItem(it)}
-                            style={smallButton}
+                            className="panel-link-btn"
                           >
                             Editar
                           </button>
                           <button
                             type="button"
                             onClick={() => handleExcluirItem(it.id)}
-                            style={{ ...smallButton, color: "#b91c1c" }}
+                            className="panel-link-btn panel-link-btn--danger"
                           >
                             Excluir
                           </button>
@@ -1251,68 +991,20 @@ export default function CampanhasConteudoPage() {
   );
 }
 
-// ---------- componentes utilitários ----------
-function Field(props: {
-  label: string;
-  children: React.ReactNode;
-}) {
+// ---------- componentes utilitarios ----------
+function Field(props: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label
-        style={{
-          fontSize: 11,
-          fontWeight: 500,
-          color: "#374151",
-        }}
-      >
-        {props.label}
-      </label>
+    <div className="panel-field">
+      <label className="panel-field__label">{props.label}</label>
       {props.children}
     </div>
   );
 }
 
-const inputStyle: React.CSSProperties = {
-  padding: "7px 9px",
-  borderRadius: 8,
-  border: "1px solid #d1d5db",
-  fontSize: 12,
-  outline: "none",
-};
-
 const Th = ({ children }: { children: React.ReactNode }) => (
-  <th
-    style={{
-      padding: "6px 8px",
-      fontWeight: 600,
-      fontSize: 10,
-      textTransform: "uppercase",
-      letterSpacing: "0.05em",
-      color: "#6b7280",
-      whiteSpace: "nowrap",
-    }}
-  >
-    {children}
-  </th>
+  <th className="panel-table__th">{children}</th>
 );
 
 const Td = ({ children }: { children: React.ReactNode }) => (
-  <td
-    style={{
-      padding: "6px 8px",
-      color: "#111827",
-      verticalAlign: "top",
-    }}
-  >
-    {children}
-  </td>
-);
-
-const smallButton: React.CSSProperties = {
-  border: "none",
-  background: "none",
-  fontSize: 11,
-  cursor: "pointer",
-  color: "#0f172a",
-  padding: 0,
-};
+  <td className="panel-table__td">{children}</td>
+);

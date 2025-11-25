@@ -460,26 +460,9 @@ export default function JbpJvcPage() {
      .join(" → ");
 
   return (
-    <div
-      style={{
-        maxWidth: 1180,
-        margin: "0 auto",
-        display: "grid",
-        gridTemplateColumns: "minmax(0, 0.95fr) minmax(0, 1.4fr)",
-        gap: 18,
-        alignItems: "flex-start",
-      }}
-    >
+    <div className="panel-grid jbp-page">
       {/* Coluna esquerda: lista de planos */}
-      <section
-        style={{
-          backgroundColor: "#ffffff",
-          borderRadius: 12,
-          padding: 14,
-          boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
-          border: "1px solid #e5e7eb",
-        }}
-      >
+      <section className="panel-card panel-card--soft">
         <div
           style={{
             marginBottom: 8,
@@ -515,15 +498,7 @@ export default function JbpJvcPage() {
           <button
             type="button"
             onClick={resetHeaderForm}
-            style={{
-              borderRadius: 999,
-              border: "1px solid #e5e7eb",
-              padding: "6px 12px",
-              background: "#ffffff",
-              fontSize: 12,
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
+            className="ct-btn-secondary"
           >
             Novo JBP
           </button>
@@ -549,14 +524,7 @@ export default function JbpJvcPage() {
           <button
             type="button"
             onClick={carregarListaJbps}
-            style={{
-              borderRadius: 999,
-              border: "1px solid #e5e7eb",
-              padding: "4px 10px",
-              background: "#ffffff",
-              fontSize: 11,
-              cursor: "pointer",
-            }}
+            className="ct-btn-secondary"
           >
             Atualizar
           </button>
@@ -658,15 +626,7 @@ export default function JbpJvcPage() {
         }}
       >
         {/* Cabeçalho do plano */}
-        <section
-          style={{
-            backgroundColor: "#ffffff",
-            borderRadius: 12,
-            padding: 14,
-            boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
-            border: "1px solid #e5e7eb",
-          }}
-        >
+        <section className="panel-card">
           <div
             style={{
               marginBottom: 8,
@@ -690,15 +650,7 @@ export default function JbpJvcPage() {
               <button
                 type="button"
                 onClick={() => setShowModal(true)}
-                style={{
-                  borderRadius: 999,
-                  border: "1px solid #e5e7eb",
-                  padding: "6px 12px",
-                  background: "#ffffff",
-                  fontSize: 11,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                }}
+                className="ct-btn-secondary"
               >
                 Ver JBP completo
               </button>
@@ -864,16 +816,7 @@ export default function JbpJvcPage() {
               <button
                 type="submit"
                 disabled={savingHeader}
-                style={{
-                  padding: "8px 16px",
-                  borderRadius: 999,
-                  border: "none",
-                  backgroundColor: "#0f172a",
-                  color: "#ffffff",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: savingHeader ? "not-allowed" : "pointer",
-                }}
+                className="ct-btn-primary"
               >
                 {savingHeader
                   ? "Salvando..."
@@ -1075,14 +1018,7 @@ export default function JbpJvcPage() {
                 <button
                   type="button"
                   onClick={resetItemForm}
-                  style={{
-                    borderRadius: 999,
-                    border: "1px solid #e5e7eb",
-                    padding: "7px 12px",
-                    background: "#ffffff",
-                    fontSize: 12,
-                    cursor: "pointer",
-                  }}
+                  className="ct-btn-secondary"
                 >
                   Cancelar edição
                 </button>
@@ -1090,16 +1026,7 @@ export default function JbpJvcPage() {
               <button
                 type="submit"
                 disabled={savingItem}
-                style={{
-                  padding: "7px 16px",
-                  borderRadius: 999,
-                  border: "none",
-                  backgroundColor: "#0f172a",
-                  color: "#ffffff",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: savingItem ? "not-allowed" : "pointer",
-                }}
+                className="ct-btn-primary"
               >
                 {savingItem
                   ? "Salvando item..."
@@ -1814,33 +1741,14 @@ export default function JbpJvcPage() {
               >
                 <button
                   type="submit"
-                  style={{
-                    padding: "7px 14px",
-                    borderRadius: 999,
-                    border: "none",
-                    backgroundColor: "#0f172a",
-                    color: "#ffffff",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
+                  className="ct-btn-primary"
                 >
                   Salvar alterações do JBP
                 </button>
                 <button
                   type="button"
                   onClick={handleGerarContrato}
-                  style={{
-                    padding: "7px 14px",
-                    borderRadius: 999,
-                    border: "none",
-                    background:
-                      "linear-gradient(to right, #4f46e5, #7c3aed, #a855f7)",
-                    color: "#ffffff",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
+                  className="ct-btn-primary"
                 >
                   Gerar contrato
                 </button>
@@ -1855,55 +1763,29 @@ export default function JbpJvcPage() {
 
 function Field({ label, children }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label
-        style={{
-          fontSize: 11,
-          fontWeight: 500,
-          color: "#374151",
-        }}
-      >
-        {label}
-      </label>
+    <div className="panel-field">
+      <label className="panel-field__label">{label}</label>
       {children}
     </div>
   );
 }
 
 const inputStyle = {
-  padding: "7px 9px",
-  borderRadius: 8,
-  border: "1px solid #d1d5db",
+  padding: "8px 10px",
+  borderRadius: 10,
+  border: "1px solid #dbeafe",
   fontSize: 12,
   outline: "none",
+  boxShadow: "0 6px 16px rgba(14, 165, 233, 0.06)",
+  background: "#ffffff",
 };
 
 const Th = ({ children }) => (
-  <th
-    style={{
-      padding: "6px 8px",
-      fontWeight: 600,
-      fontSize: 10,
-      textTransform: "uppercase",
-      letterSpacing: "0.05em",
-      color: "#6b7280",
-      whiteSpace: "nowrap",
-    }}
-  >
-    {children}
-  </th>
+  <th className="panel-table__th">{children}</th>
 );
 
 const Td = ({ children }) => (
-  <td
-    style={{
-      padding: "6px 8px",
-      color: "#111827",
-      verticalAlign: "top",
-    }}
-  >
-    {children}
-  </td>
+  <td className="panel-table__td">{children}</td>
 );
 
 const smallButton = {
