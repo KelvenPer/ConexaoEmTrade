@@ -1,18 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+type Usuario = {
+  id: number;
+  name: string;
+  login: string;
+  email: string;
+  role: string;
+  status: string;
+  photoUrl?: string | null;
+  accessChannel?: string | null;
+  supplierId?: number | null;
+  createdAt?: string;
+};
+
+type Fornecedor = {
+  id: number;
+  name: string;
+};
 
 export default function ConfigUsuariosPage() {
   const apiBaseUrl =
     process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-  const [usuarios, setUsuarios] = useState([]);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  const [editingId, setEditingId] = useState(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -20,8 +39,16 @@ export default function ConfigUsuariosPage() {
     email: "",
     password: "",
     role: "user",
-    status: "ativo", // novo campo
+    status: "ativo",
+    accessChannel: "industria",
+    supplierId: "",
   });
+
+  const supplierMap = useMemo(() => {
+    const map = new Map<number, string>();
+    fornecedores.forEach((f) => map.set(f.id, f.name));
+    return map;
+  }, [fornecedores]);
 
   async function carregarUsuarios() {
     try {
@@ -30,22 +57,37 @@ export default function ConfigUsuariosPage() {
       const res = await fetch(`${apiBaseUrl}/api/usuarios`);
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || "Erro ao carregar usuários.");
+        throw new Error(data.message || "Erro ao carregar usuarios.");
       }
       setUsuarios(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao carregar usuários.");
+      setErrorMsg(err.message || "Erro ao carregar usuarios.");
     } finally {
       setLoading(false);
     }
   }
 
+  async function carregarFornecedores() {
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/fornecedores/ativos`);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Erro ao carregar fornecedores.");
+      }
+      setFornecedores(data);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || "Erro ao carregar fornecedores.");
+    }
+  }
+
   useEffect(() => {
     carregarUsuarios();
+    carregarFornecedores();
   }, []);
 
-  function handleChange(e) {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
     setForm((prev) => ({
       ...prev,
@@ -62,12 +104,14 @@ export default function ConfigUsuariosPage() {
       password: "",
       role: "user",
       status: "ativo",
+      accessChannel: "industria",
+      supplierId: "",
     });
     setErrorMsg("");
     setSuccessMsg("");
   }
 
-  function handleEditar(usuario) {
+  function handleEditar(usuario: Usuario) {
     setEditingId(usuario.id);
     setForm({
       name: usuario.name || "",
@@ -76,35 +120,44 @@ export default function ConfigUsuariosPage() {
       password: "",
       role: usuario.role || "user",
       status: usuario.status || "ativo",
+      accessChannel: usuario.accessChannel || "industria",
+      supplierId: usuario.supplierId ?? "",
     });
     setErrorMsg("");
     setSuccessMsg("");
   }
 
-  async function handleSalvar(e) {
+  async function handleSalvar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
 
     if (!form.name || !form.login || !form.email) {
-      setErrorMsg("Nome, login e e-mail são obrigatórios.");
+      setErrorMsg("Nome, login e e-mail sao obrigatorios.");
       return;
     }
 
     if (!editingId && !form.password) {
-      setErrorMsg("Senha é obrigatória para novo usuário.");
+      setErrorMsg("Senha e obrigatoria para novo usuario.");
       return;
     }
+
+    const supplierIdParsed =
+      form.accessChannel === "industria" && form.supplierId
+        ? Number(form.supplierId)
+        : null;
 
     try {
       setSaving(true);
 
-      const payload = {
+      const payload: any = {
         name: form.name,
         login: form.login,
         email: form.email,
         role: form.role,
-        status: form.status, // envia status
+        status: form.status,
+        accessChannel: form.accessChannel,
+        supplierId: supplierIdParsed,
       };
 
       if (form.password) {
@@ -126,13 +179,11 @@ export default function ConfigUsuariosPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.message || "Erro ao salvar usuário.");
+        throw new Error(data.message || "Erro ao salvar usuario.");
       }
 
       setSuccessMsg(
-        editingId
-          ? "Usuário atualizado com sucesso."
-          : "Usuário criado com sucesso."
+        editingId ? "Usuario atualizado com sucesso." : "Usuario criado com sucesso."
       );
       setForm((prev) => ({
         ...prev,
@@ -143,16 +194,16 @@ export default function ConfigUsuariosPage() {
       if (!editingId) {
         handleNovo();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao salvar usuário.");
+      setErrorMsg(err.message || "Erro ao salvar usuario.");
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleExcluir(id) {
-    if (!window.confirm("Tem certeza que deseja excluir este usuário?")) return;
+  async function handleExcluir(id: number) {
+    if (!window.confirm("Tem certeza que deseja excluir este usuario?")) return;
 
     try {
       setErrorMsg("");
@@ -162,20 +213,20 @@ export default function ConfigUsuariosPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || "Erro ao excluir usuário.");
+        throw new Error(data.message || "Erro ao excluir usuario.");
       }
-      setSuccessMsg("Usuário excluído com sucesso.");
+      setSuccessMsg("Usuario excluido com sucesso.");
       await carregarUsuarios();
       if (editingId === id) {
         handleNovo();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao excluir usuário.");
+      setErrorMsg(err.message || "Erro ao excluir usuario.");
     }
   }
 
-  async function handleToggleStatus(usuario) {
+  async function handleToggleStatus(usuario: Usuario) {
     const novoStatus = usuario.status === "ativo" ? "inativo" : "ativo";
 
     try {
@@ -190,9 +241,9 @@ export default function ConfigUsuariosPage() {
       if (!res.ok) {
         throw new Error(data.message || "Erro ao atualizar status.");
       }
-      setSuccessMsg("Status do usuário atualizado com sucesso.");
+      setSuccessMsg("Status do usuario atualizado com sucesso.");
       await carregarUsuarios();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Erro ao atualizar status.");
     }
@@ -208,11 +259,11 @@ export default function ConfigUsuariosPage() {
           color: "#0f172a",
         }}
       >
-        Usuários
+        Usuarios
       </h1>
       <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>
-        Administração de usuários que acessam o Conexão em Trade. Somente
-        usuários ativos conseguem fazer login.
+        Administracao de usuarios que acessam o Conexao em Trade. Somente
+        usuarios ativos conseguem fazer login.
       </p>
 
       <div
@@ -223,7 +274,7 @@ export default function ConfigUsuariosPage() {
           alignItems: "flex-start",
         }}
       >
-        {/* Formulário */}
+        {/* Formulario */}
         <section
           style={{
             backgroundColor: "#ffffff",
@@ -246,7 +297,7 @@ export default function ConfigUsuariosPage() {
                 fontWeight: 600,
               }}
             >
-              {editingId ? "Editar usuário" : "Novo usuário"}
+              {editingId ? "Editar usuario" : "Novo usuario"}
             </h2>
             {editingId && (
               <button
@@ -260,7 +311,7 @@ export default function ConfigUsuariosPage() {
                   color: "#6b7280",
                 }}
               >
-                Limpar formulário
+                Limpar formulario
               </button>
             )}
           </div>
@@ -308,9 +359,7 @@ export default function ConfigUsuariosPage() {
                 name="password"
                 value={form.password}
                 onChange={handleChange}
-                placeholder={
-                  editingId ? "Deixe em branco para manter" : "••••••••"
-                }
+                placeholder={editingId ? "Deixe em branco para manter" : "********"}
                 style={inputStyle}
               />
             </Field>
@@ -322,9 +371,46 @@ export default function ConfigUsuariosPage() {
                 onChange={handleChange}
                 style={{ ...inputStyle, paddingRight: 28 }}
               >
-                <option value="user">Usuário</option>
+                <option value="user">Usuario</option>
                 <option value="admin">Admin</option>
               </select>
+            </Field>
+
+            <Field label="Segmento">
+              <select
+                name="accessChannel"
+                value={form.accessChannel}
+                onChange={handleChange}
+                style={{ ...inputStyle, paddingRight: 28 }}
+              >
+                <option value="industria">Industria</option>
+                <option value="varejo">Varejo</option>
+              </select>
+            </Field>
+
+            <Field label="Fornecedor (apenas Industria)">
+              <select
+                name="supplierId"
+                value={form.supplierId}
+                onChange={handleChange}
+                disabled={form.accessChannel !== "industria"}
+                style={{
+                  ...inputStyle,
+                  paddingRight: 28,
+                  background:
+                    form.accessChannel === "industria" ? "#fff" : "#f3f4f6",
+                }}
+              >
+                <option value="">Sem vinculo</option>
+                {fornecedores.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+              <span style={{ fontSize: 11, color: "#6b7280" }}>
+                Selecione um fornecedor para acessos de industria.
+              </span>
             </Field>
 
             <Field label="Status">
@@ -366,8 +452,8 @@ export default function ConfigUsuariosPage() {
                   ? "Salvando..."
                   : "Criando..."
                 : editingId
-                ? "Salvar alterações"
-                : "Criar usuário"}
+                ? "Salvar alteracoes"
+                : "Criar usuario"}
             </button>
           </form>
         </section>
@@ -395,7 +481,7 @@ export default function ConfigUsuariosPage() {
                 fontWeight: 600,
               }}
             >
-              Lista de usuários
+              Lista de usuarios
             </h2>
             <button
               type="button"
@@ -417,7 +503,7 @@ export default function ConfigUsuariosPage() {
             <div style={{ fontSize: 13, color: "#6b7280" }}>Carregando...</div>
           ) : usuarios.length === 0 ? (
             <div style={{ fontSize: 13, color: "#6b7280" }}>
-              Nenhum usuário cadastrado ainda.
+              Nenhum usuario cadastrado ainda.
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
@@ -439,9 +525,11 @@ export default function ConfigUsuariosPage() {
                     <Th>Login</Th>
                     <Th>E-mail</Th>
                     <Th>Perfil</Th>
+                    <Th>Segmento</Th>
+                    <Th>Fornecedor</Th>
                     <Th>Status</Th>
                     <Th>Criado em</Th>
-                    <Th>Ações</Th>
+                    <Th>Acao</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -456,6 +544,12 @@ export default function ConfigUsuariosPage() {
                       <Td>{u.login}</Td>
                       <Td>{u.email}</Td>
                       <Td>{u.role}</Td>
+                      <Td>{u.accessChannel || "-"}</Td>
+                      <Td>
+                        {u.supplierId
+                          ? supplierMap.get(u.supplierId) || `ID ${u.supplierId}`
+                          : "-"}
+                      </Td>
                       <Td>
                         <span
                           style={{
@@ -521,7 +615,7 @@ export default function ConfigUsuariosPage() {
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <label
@@ -538,7 +632,7 @@ function Field({ label, children }) {
   );
 }
 
-const inputStyle = {
+const inputStyle: React.CSSProperties = {
   padding: "7px 9px",
   borderRadius: 8,
   border: "1px solid #d1d5db",
@@ -546,7 +640,7 @@ const inputStyle = {
   outline: "none",
 };
 
-const Th = ({ children }) => (
+const Th = ({ children }: { children: React.ReactNode }) => (
   <th
     style={{
       padding: "6px 8px",
@@ -561,7 +655,7 @@ const Th = ({ children }) => (
   </th>
 );
 
-const Td = ({ children }) => (
+const Td = ({ children }: { children: React.ReactNode }) => (
   <td
     style={{
       padding: "6px 8px",
@@ -572,7 +666,7 @@ const Td = ({ children }) => (
   </td>
 );
 
-const smallButton = {
+const smallButton: React.CSSProperties = {
   border: "none",
   background: "none",
   fontSize: 11,

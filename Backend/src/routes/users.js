@@ -22,6 +22,8 @@ router.get("/", async (_req, res) => {
         role: true,
         status: true,
         photoUrl: true,
+        accessChannel: true,
+        supplierId: true,
         createdAt: true,
       },
     });
@@ -62,6 +64,8 @@ router.get("/me", async (req, res) => {
         role: true,
         status: true,
         photoUrl: true,
+        accessChannel: true,
+        supplierId: true,
         createdAt: true,
       },
     });
@@ -119,7 +123,17 @@ router.get("/:id", async (req, res) => {
  */
 router.post("/", async (req, res) => {
   try {
-    const { name, email, login, password, role, status, photoUrl } = req.body;
+    const {
+      name,
+      email,
+      login,
+      password,
+      role,
+      status,
+      photoUrl,
+      accessChannel,
+      supplierId,
+    } = req.body;
 
     if (!name || !email || !login || !password) {
       return res.status(400).json({
@@ -157,6 +171,8 @@ router.post("/", async (req, res) => {
         role: role || "user",
         status: status || "ativo",
         photoUrl: photoUrl || null,
+        accessChannel: accessChannel === "varejo" ? "varejo" : "industria",
+        supplierId: Number.isInteger(supplierId) ? supplierId : null,
       },
       select: {
         id: true,
@@ -166,6 +182,8 @@ router.post("/", async (req, res) => {
         role: true,
         status: true,
         photoUrl: true,
+        accessChannel: true,
+        supplierId: true,
         createdAt: true,
       },
     });
@@ -190,7 +208,17 @@ router.put("/:id", async (req, res) => {
     if (Number.isNaN(id)) {
       return res.status(400).json({ message: "ID invalido." });
     }
-    const { name, email, login, password, role, status, photoUrl } = req.body;
+    const {
+      name,
+      email,
+      login,
+      password,
+      role,
+      status,
+      photoUrl,
+      accessChannel,
+      supplierId,
+    } = req.body;
 
     const usuarioAtual = await prisma.TBLUSER.findUnique({
       where: { id },
@@ -241,6 +269,13 @@ router.put("/:id", async (req, res) => {
         role: role ?? usuarioAtual.role,
         status: status ?? usuarioAtual.status,
         photoUrl: photoUrl ?? usuarioAtual.photoUrl,
+        accessChannel:
+          accessChannel ??
+          usuarioAtual.accessChannel ??
+          "industria",
+        supplierId: Number.isInteger(supplierId)
+          ? supplierId
+          : usuarioAtual.supplierId,
         passwordHash,
       },
       select: {
@@ -251,6 +286,8 @@ router.put("/:id", async (req, res) => {
         role: true,
         status: true,
         photoUrl: true,
+        accessChannel: true,
+        supplierId: true,
         createdAt: true,
       },
     });

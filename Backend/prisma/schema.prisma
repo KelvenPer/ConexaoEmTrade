@@ -22,6 +22,7 @@ model TBLFORN {
   execPlanos    TBLEXECPLANO[]
   retailPlanos  TBLRETAILMEDIA_PLANO[]
   vendasResumos TBLVENDASRESUMO[]
+  users         TBLUSER[]
 }
 
 model TBLATV {
@@ -227,4 +228,8 @@ model TBLUSER {
   status       String   @default("ativo")
   createdAt    DateTime @default(now())
   photoUrl     String?
+  accessChannel String  @default("industria") // industria | varejo
+  supplierId    Int?
+
+  supplier TBLFORN? @relation(fields: [supplierId], references: [id])
 }

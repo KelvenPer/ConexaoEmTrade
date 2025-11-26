@@ -137,8 +137,8 @@ body {
 
 .login-hero__brand {
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  align-items: center;
+  gap: 12px;
 }
 
 .login-avatar {
@@ -273,6 +273,14 @@ body {
   border: 1px solid #dbeafe;
 }
 
+.login-mode-hint {
+  margin-top: -2px;
+  font-size: 12px;
+  color: #334155;
+  padding: 6px 10px 0;
+  animation: fade-in 0.18s ease;
+}
+
 .login-toggle__btn {
   border: none;
   background: transparent;
@@ -312,6 +320,31 @@ body {
   gap: 6px;
 }
 
+.login-field__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.login-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #1f2937;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid #dbeafe;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.login-pill--alert {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #b45309;
+}
+
 .login-label {
   font-size: 13px;
   font-weight: 600;
@@ -337,6 +370,48 @@ body {
   box-shadow:
     0 12px 28px rgba(37, 99, 235, 0.2),
     0 0 0 1px rgba(37, 99, 235, 0.1);
+}
+
+.login-input.is-empty {
+  border-color: #f97316;
+  background: #fff7ed;
+  box-shadow: 0 10px 24px rgba(249, 115, 22, 0.12);
+}
+
+.login-input.is-shaking {
+  animation: login-shake 0.32s ease;
+}
+
+.login-hint {
+  font-size: 12px;
+  color: #475569;
+  margin-top: 4px;
+  opacity: 1;
+  max-height: 26px;
+  transition: opacity 0.16s ease, max-height 0.16s ease;
+}
+
+.login-hint.is-hidden {
+  opacity: 0;
+  max-height: 0;
+}
+
+@keyframes login-shake {
+  0% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+  75% {
+    transform: translateX(-2px);
+  }
+  100% {
+    transform: translateX(0);
+  }
 }
 
 .login-error {

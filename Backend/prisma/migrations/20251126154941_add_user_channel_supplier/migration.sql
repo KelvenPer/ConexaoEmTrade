@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "TBLUSER" ADD COLUMN     "accessChannel" TEXT NOT NULL DEFAULT 'industria',
+ADD COLUMN     "supplierId" INTEGER;
+
+-- AddForeignKey
+ALTER TABLE "TBLUSER" ADD CONSTRAINT "TBLUSER_supplierId_fkey" FOREIGN KEY ("supplierId") REFERENCES "TBLFORN"("id") ON DELETE SET NULL ON UPDATE CASCADE;

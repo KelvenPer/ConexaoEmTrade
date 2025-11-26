@@ -3,23 +3,41 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
+type EntryMode = "industria" | "varejo";
+type ShakeField = "identifier" | "password" | null;
+
 export default function LoginPage() {
   const router = useRouter();
 
-  const [mode, setMode] = useState("login"); // 'login' ou 'email'
+  const [entryMode, setEntryMode] = useState<EntryMode>("industria");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [touched, setTouched] = useState({ identifier: false, password: false });
+  const [nudgeField, setNudgeField] = useState<ShakeField>(null);
 
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const accessChannel = entryMode === "industria" ? "industria" : "varejo";
+
+  function markTouched(field: "identifier" | "password") {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+  }
+
+  function nudge(field: ShakeField) {
+    if (!field) return;
+    setNudgeField(field);
+    setTimeout(() => setNudgeField(null), 520);
+  }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErrorMsg("");
 
     if (!identifier || !password) {
-      setErrorMsg("Preencha o usuario (login/e-mail) e a senha.");
+      setErrorMsg("Preencha Login / Email e a senha para continuar.");
+      if (!identifier) nudge("identifier");
+      if (!password) nudge("password");
       return;
     }
 
@@ -30,7 +48,8 @@ export default function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          loginOrEmail: identifier,
+          identifier,
+          accessChannel,
           password,
         }),
       });
@@ -64,9 +83,27 @@ export default function LoginPage() {
     alert("Fluxo de 'Esqueci minha senha' ainda sera implementado.");
   }
 
-  const labelText = mode === "login" ? "Login" : "E-mail";
   const placeholderText =
-    mode === "login" ? "seu.login" : "voce@empresa.com";
+    entryMode === "industria"
+      ? "login corporativo ou email"
+      : "login do varejo ou email";
+
+  const modeHint =
+    entryMode === "industria"
+      ? "Acesso para industria, fabricantes e distribuidores."
+      : "Acesso para times de loja, compradores e varejo.";
+
+  const emptyIdentifierHint =
+    !identifier && touched.identifier
+      ? entryMode === "industria"
+        ? "Use seu login interno ou e-mail corporativo."
+        : "Use o login ou e-mail cadastrado pelo varejo."
+      : "";
+
+  const emptyPasswordHint =
+    !password && touched.password
+      ? "Senha obrigatoria para validar seu acesso."
+      : "";
 
   return (
     <div className="login-page">
@@ -76,14 +113,13 @@ export default function LoginPage() {
       <div className="login-layout">
         <div className="login-hero">
           <div className="login-hero__brand">
-            <div className="login-avatar">CT</div>
             <div>
               <p className="login-eyebrow">Conexao em Trade</p>
               <h1 className="login-title">
                 Dados, varejo e industria falando a mesma lingua.
               </h1>
               <p className="login-subtitle">
-                CRM focado em Trade Marketing para conectar planejamento,
+                Plataforma real de Trade Marketing para conectar planejamento,
                 execucao e resultados em tempo real.
               </p>
             </div>
@@ -107,48 +143,79 @@ export default function LoginPage() {
             <p className="login-card__eyebrow">Bem-vindo de volta</p>
             <h2 className="login-card__title">Acesse seu painel</h2>
             <p className="login-card__muted">
-              Use o login interno ou seu e-mail cadastrado para continuar.
+              Digite seu login ou e-mail cadastrado. Reconhecemos os dois
+              automaticamente.
             </p>
           </div>
 
           <div className="login-toggle">
             <button
               type="button"
-              className={`login-toggle__btn ${mode === "login" ? "is-active" : ""}`}
-              onClick={() => setMode("login")}
+              className={`login-toggle__btn ${entryMode === "industria" ? "is-active" : ""}`}
+              onClick={() => {
+                setEntryMode("industria");
+                setErrorMsg("");
+                nudge("identifier");
+              }}
             >
-              Entrar com login
+              Entrar como Industria
             </button>
             <button
               type="button"
-              className={`login-toggle__btn ${mode === "email" ? "is-active" : ""}`}
-              onClick={() => setMode("email")}
+              className={`login-toggle__btn ${entryMode === "varejo" ? "is-active" : ""}`}
+              onClick={() => {
+                setEntryMode("varejo");
+                setErrorMsg("");
+                nudge("identifier");
+              }}
             >
-              Entrar com e-mail
+              Entrar como Varejo
             </button>
+          </div>
+          <div className="login-mode-hint" aria-live="polite">
+            {modeHint}
           </div>
 
           <form className="login-form" onSubmit={handleSubmit}>
             <div className="login-field">
-              <label className="login-label">{labelText}</label>
+              <div className="login-field__header">
+                <label className="login-label">Login / Email</label>
+                <span className="login-pill">{entryMode}</span>
+              </div>
               <input
-                className="login-input"
-                type={mode === "email" ? "email" : "text"}
+                className={`login-input ${nudgeField === "identifier" ? "is-shaking" : ""} ${!identifier && touched.identifier ? "is-empty" : ""}`}
+                type="text"
                 value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
+                onChange={(e) => setIdentifier(e.target.value.trimStart())}
+                onBlur={() => markTouched("identifier")}
                 placeholder={placeholderText}
               />
+              <div className={`login-hint ${identifier ? "is-hidden" : ""}`}>
+                {emptyIdentifierHint ||
+                  (entryMode === "industria"
+                    ? "Pode ser o login interno ou o e-mail corporativo."
+                    : "Aceitamos login ou e-mail do varejo cadastrado.")}
+              </div>
             </div>
 
             <div className="login-field">
-              <label className="login-label">Senha</label>
+              <div className="login-field__header">
+                <label className="login-label">Senha</label>
+                {!password && touched.password && (
+                  <span className="login-pill login-pill--alert">faltando</span>
+                )}
+              </div>
               <input
-                className="login-input"
+                className={`login-input ${nudgeField === "password" ? "is-shaking" : ""} ${!password && touched.password ? "is-empty" : ""}`}
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onBlur={() => markTouched("password")}
                 placeholder="********"
               />
+              <div className={`login-hint ${password ? "is-hidden" : ""}`}>
+                {emptyPasswordHint || "Com oito caracteres voce passa direto."}
+              </div>
             </div>
 
             {errorMsg && <div className="login-error">{errorMsg}</div>}
@@ -178,9 +245,8 @@ export default function LoginPage() {
               Criar nova conta
             </button>
             <p className="login-meta">
-              Plataforma de portfolio em Trade Marketing para planejar JBP,
-              projetos JVC, execucao em PDV e analise de resultados com foco no
-              varejo.
+              Plataforma real de Trade Marketing para planejar JBP, projetos JVC,
+              executar no PDV e analisar resultados com foco no varejo.
             </p>
           </div>
         </div>
