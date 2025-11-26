@@ -1,15 +1,16 @@
 // backend/src/routes/users.js
 const express = require("express");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 const prisma = require("../prisma");
 
 const router = express.Router();
 
 /**
  * GET /api/usuarios
- * Lista todos os usuários
+ * Lista todos os usuarios
  */
-router.get("/", async (req, res) => {
+router.get("/", async (_req, res) => {
   try {
     const usuarios = await prisma.TBLUSER.findMany({
       orderBy: { name: "asc" },
@@ -20,24 +21,72 @@ router.get("/", async (req, res) => {
         email: true,
         role: true,
         status: true,
+        photoUrl: true,
         createdAt: true,
       },
     });
 
     res.json(usuarios);
   } catch (error) {
-    console.error("Erro ao listar usuários:", error);
-    res.status(500).json({ message: "Erro ao listar usuários." });
+    console.error("Erro ao listar usuarios:", error);
+    res.status(500).json({ message: "Erro ao listar usuarios." });
+  }
+});
+
+/**
+ * GET /api/usuarios/me
+ * Dados do usuario logado
+ */
+router.get("/me", async (req, res) => {
+  try {
+    const auth = req.headers.authorization;
+    if (!auth || !auth.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "Token ausente." });
+    }
+    const token = auth.replace("Bearer ", "");
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch {
+      return res.status(401).json({ message: "Token invalido." });
+    }
+
+    const usuario = await prisma.TBLUSER.findUnique({
+      where: { id: decoded.id },
+      select: {
+        id: true,
+        name: true,
+        login: true,
+        email: true,
+        role: true,
+        status: true,
+        photoUrl: true,
+        createdAt: true,
+      },
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ message: "Usuario nao encontrado." });
+    }
+
+    res.json(usuario);
+  } catch (error) {
+    console.error("Erro ao buscar usuario logado:", error);
+    res.status(500).json({ message: "Erro ao buscar usuario logado." });
   }
 });
 
 /**
  * GET /api/usuarios/:id
- * Busca um usuário pelo ID
+ * Busca um usuario pelo ID
  */
 router.get("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ message: "ID invalido." });
+    }
 
     const usuario = await prisma.TBLUSER.findUnique({
       where: { id },
@@ -48,54 +97,52 @@ router.get("/:id", async (req, res) => {
         email: true,
         role: true,
         status: true,
+        photoUrl: true,
         createdAt: true,
       },
     });
 
     if (!usuario) {
-      return res.status(404).json({ message: "Usuário não encontrado." });
+      return res.status(404).json({ message: "Usuario nao encontrado." });
     }
 
     res.json(usuario);
   } catch (error) {
-    console.error("Erro ao buscar usuário:", error);
-    res.status(500).json({ message: "Erro ao buscar usuário." });
+    console.error("Erro ao buscar usuario:", error);
+    res.status(500).json({ message: "Erro ao buscar usuario." });
   }
 });
 
 /**
  * POST /api/usuarios
- * Cria um novo usuário (CRUD administrativo)
- * Obs: /api/auth/novoCadastro continua existindo para fluxo de cadastro normal.
+ * Cria um novo usuario
  */
 router.post("/", async (req, res) => {
   try {
-    const { name, email, login, password, role, status } = req.body;
+    const { name, email, login, password, role, status, photoUrl } = req.body;
 
     if (!name || !email || !login || !password) {
       return res.status(400).json({
-        message: "Nome, login, e-mail e senha são obrigatórios.",
+        message: "Nome, login, e-mail e senha sao obrigatorios.",
       });
     }
 
-    // Verifica e-mail duplicado
     const emailExistente = await prisma.TBLUSER.findUnique({
       where: { email },
     });
     if (emailExistente) {
       return res
         .status(409)
-        .json({ message: "Já existe um usuário com este e-mail." });
+        .json({ message: "Ja existe um usuario com este e-mail." });
     }
 
-    // Verifica login duplicado
     const loginExistente = await prisma.TBLUSER.findFirst({
       where: { login },
     });
     if (loginExistente) {
       return res
         .status(409)
-        .json({ message: "Já existe um usuário com este login." });
+        .json({ message: "Ja existe um usuario com este login." });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -109,6 +156,7 @@ router.post("/", async (req, res) => {
         passwordHash,
         role: role || "user",
         status: status || "ativo",
+        photoUrl: photoUrl || null,
       },
       select: {
         id: true,
@@ -117,39 +165,41 @@ router.post("/", async (req, res) => {
         email: true,
         role: true,
         status: true,
+        photoUrl: true,
         createdAt: true,
       },
     });
 
     res.status(201).json({
-      message: "Usuário criado com sucesso.",
+      message: "Usuario criado com sucesso.",
       usuario,
     });
   } catch (error) {
-    console.error("Erro ao criar usuário:", error);
-    res.status(500).json({ message: "Erro ao criar usuário." });
+    console.error("Erro ao criar usuario:", error);
+    res.status(500).json({ message: "Erro ao criar usuario." });
   }
 });
 
 /**
  * PUT /api/usuarios/:id
- * Atualiza dados do usuário
- * Se for passado password, atualiza também a senha (re-hash).
+ * Atualiza dados do usuario
  */
 router.put("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { name, email, login, password, role, status } = req.body;
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ message: "ID invalido." });
+    }
+    const { name, email, login, password, role, status, photoUrl } = req.body;
 
     const usuarioAtual = await prisma.TBLUSER.findUnique({
       where: { id },
     });
 
     if (!usuarioAtual) {
-      return res.status(404).json({ message: "Usuário não encontrado." });
+      return res.status(404).json({ message: "Usuario nao encontrado." });
     }
 
-    // Se email for enviado e mudar, checa se já existe outro com esse e-mail
     if (email && email !== usuarioAtual.email) {
       const emailExistente = await prisma.TBLUSER.findUnique({
         where: { email },
@@ -157,22 +207,21 @@ router.put("/:id", async (req, res) => {
       if (emailExistente) {
         return res
           .status(409)
-          .json({ message: "Já existe um usuário com este e-mail." });
+          .json({ message: "Ja existe um usuario com este e-mail." });
       }
     }
 
-    // Se login for enviado e mudar, checa se já existe outro com esse login
     if (login && login !== usuarioAtual.login) {
       const loginExistente = await prisma.TBLUSER.findFirst({
         where: {
           login,
-          NOT: { id }, // ignora o próprio usuário
+          NOT: { id },
         },
       });
       if (loginExistente) {
         return res
           .status(409)
-          .json({ message: "Já existe um usuário com este login." });
+          .json({ message: "Ja existe um usuario com este login." });
       }
     }
 
@@ -191,6 +240,7 @@ router.put("/:id", async (req, res) => {
         login: login ?? usuarioAtual.login,
         role: role ?? usuarioAtual.role,
         status: status ?? usuarioAtual.status,
+        photoUrl: photoUrl ?? usuarioAtual.photoUrl,
         passwordHash,
       },
       select: {
@@ -200,44 +250,48 @@ router.put("/:id", async (req, res) => {
         email: true,
         role: true,
         status: true,
+        photoUrl: true,
         createdAt: true,
       },
     });
 
     res.json({
-      message: "Usuário atualizado com sucesso.",
+      message: "Usuario atualizado com sucesso.",
       usuario: usuarioAtualizado,
     });
   } catch (error) {
-    console.error("Erro ao atualizar usuário:", error);
-    res.status(500).json({ message: "Erro ao atualizar usuário." });
+    console.error("Erro ao atualizar usuario:", error);
+    res.status(500).json({ message: "Erro ao atualizar usuario." });
   }
 });
 
 /**
  * DELETE /api/usuarios/:id
- * Remove um usuário
+ * Remove um usuario
  */
 router.delete("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ message: "ID invalido." });
+    }
 
     const usuario = await prisma.TBLUSER.findUnique({
       where: { id },
     });
 
     if (!usuario) {
-      return res.status(404).json({ message: "Usuário não encontrado." });
+      return res.status(404).json({ message: "Usuario nao encontrado." });
     }
 
     await prisma.TBLUSER.delete({
       where: { id },
     });
 
-    res.json({ message: "Usuário deletado com sucesso." });
+    res.json({ message: "Usuario deletado com sucesso." });
   } catch (error) {
-    console.error("Erro ao deletar usuário:", error);
-    res.status(500).json({ message: "Erro ao deletar usuário." });
+    console.error("Erro ao deletar usuario:", error);
+    res.status(500).json({ message: "Erro ao deletar usuario." });
   }
 });
 

@@ -13,13 +13,127 @@ import {
   LineChart,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type LayoutProps = {
   children: ReactNode;
 };
 
+type ThemeOption = "light" | "dark";
+
 export default function PainelLayout({ children }: LayoutProps) {
   const pathname = usePathname();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [theme, setTheme] = useState<ThemeOption>("light");
+  const [userName, setUserName] = useState("Usuario");
+  const [userRole, setUserRole] = useState("Trade & Dados");
+  const [userEmail, setUserEmail] = useState("");
+  const [userLogin, setUserLogin] = useState("");
+  const [userPhoto, setUserPhoto] = useState<string | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoSaving, setPhotoSaving] = useState(false);
+  const [photoMsg, setPhotoMsg] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+  useEffect(() => {
+    const storedUser = typeof window !== "undefined" ? localStorage.getItem("conexao_trade_user") : null;
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser);
+        if (parsed?.name) setUserName(parsed.name as string);
+        if (parsed?.role) setUserRole(String(parsed.role));
+        if (parsed?.email) setUserEmail(String(parsed.email));
+        if (parsed?.login) setUserLogin(String(parsed.login));
+        if (parsed?.photoUrl) setUserPhoto(String(parsed.photoUrl));
+      } catch {
+        // ignore parse issues
+      }
+    }
+
+    const storedPhoto = typeof window !== "undefined" ? localStorage.getItem("conexao_trade_user_photo") : null;
+    if (storedPhoto) {
+      setPhotoPreview(storedPhoto);
+      setUserPhoto(storedPhoto);
+    }
+
+    // sincroniza com backend, se token disponivel
+    const token = typeof window !== "undefined" ? localStorage.getItem("conexao_trade_token") : null;
+    if (token) {
+      fetch(`${apiBaseUrl}/api/usuarios/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(async (res) => {
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data?.name) setUserName(String(data.name));
+          if (data?.email) setUserEmail(String(data.email));
+          if (data?.login) setUserLogin(String(data.login));
+          if (data?.role) setUserRole(String(data.role));
+          if (data?.photoUrl) {
+            setUserPhoto(String(data.photoUrl));
+            localStorage.setItem("conexao_trade_user_photo", String(data.photoUrl));
+          } else {
+            localStorage.removeItem("conexao_trade_user_photo");
+          }
+          localStorage.setItem("conexao_trade_user", JSON.stringify(data));
+        })
+        .catch(() => {
+          /* ignora falha de sincronizacao */
+        });
+    }
+
+    const stored = typeof window !== "undefined" ? localStorage.getItem("conexao_trade_theme") : null;
+    const prefersDark = typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const nextTheme: ThemeOption = stored === "dark" || stored === "light" ? (stored as ThemeOption) : prefersDark ? "dark" : "light";
+    applyTheme(nextTheme);
+    setTheme(nextTheme);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const applyTheme = (nextTheme: ThemeOption) => {
+    document.documentElement.classList.toggle("theme-dark", nextTheme === "dark");
+    localStorage.setItem("conexao_trade_theme", nextTheme);
+  };
+
+  const toggleTheme = (nextTheme: ThemeOption) => {
+    setTheme(nextTheme);
+    applyTheme(nextTheme);
+  };
+
+  const getInitials = (name: string) => {
+    const parts = name.trim().split(" ").filter(Boolean);
+    if (!parts.length) return "CT";
+    const [first, second] = parts;
+    return (first[0] || "C").toUpperCase() + ((second?.[0] || "").toUpperCase() || (parts[0][1] || "T").toUpperCase());
+  };
+
+  const goToProfile = (tab?: string) => {
+    const suffix = tab ? `?tab=${tab}` : "";
+    window.location.assign(`/painel/config/perfil${suffix}`);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("conexao_trade_token");
+    localStorage.removeItem("conexao_trade_user");
+    window.location.assign("/login");
+  };
 
   return (
     <div className="app-shell">
@@ -29,7 +143,7 @@ export default function PainelLayout({ children }: LayoutProps) {
           <div className="app-shell__sidebar-header-logo">CT</div>
           <div className="app-shell__sidebar-header-title">
             <span className="app-shell__sidebar-header-title-main">
-              Conexão em Trade
+              Conexao em Trade
             </span>
             <span className="app-shell__sidebar-header-title-sub">
               Painel de Trade Marketing &amp; Dados
@@ -64,14 +178,14 @@ export default function PainelLayout({ children }: LayoutProps) {
               pathname={pathname}
               icon={<CalendarDays size={16} />}
             >
-              Calendário de campanhas
+              Calendario de campanhas
             </NavItem>
             <NavItem
               href="/painel/marketing/campanhas"
               pathname={pathname}
               icon={<Megaphone size={16} />}
             >
-              Campanhas &amp; conteúdo
+              Campanhas &amp; conteudo
             </NavItem>
             <NavItem
               href="/painel/marketing/resultados"
@@ -82,13 +196,13 @@ export default function PainelLayout({ children }: LayoutProps) {
             </NavItem>
           </NavGroup>
 
-          <NavGroup title="Configurações">
+          <NavGroup title="Configuracoes">
             <NavItem
               href="/painel/config/usuarios"
               pathname={pathname}
               icon={<Users size={16} />}
             >
-              Usuários
+              Usuarios
             </NavItem>
             <NavItem
               href="/painel/config/fornecedores"
@@ -102,57 +216,309 @@ export default function PainelLayout({ children }: LayoutProps) {
               pathname={pathname}
               icon={<Settings2 size={16} />}
             >
-              Ativos de mídia
+              Ativos de midia
             </NavItem>
           </NavGroup>
         </nav>
 
         <div className="app-shell__sidebar-footer">
-          <div>Conexão em Trade · v0.1</div>
-          <div>Ambiente de demonstração</div>
+          <div>Conexao em Trade - v0.1</div>
+          <div>Ambiente de demonstracao</div>
         </div>
       </aside>
 
       {/* MAIN AREA */}
       <div className="app-shell__main">
-        <header className="app-shell__topbar">
-          <div className="app-shell__topbar-left">
-            <div className="app-shell__topbar-title">Visão de Portfólio</div>
-            <div className="app-shell__topbar-sub">
-              Acompanhe JBP, campanhas, execução em loja e resultados em uma
-              visão única.
+        {!pathname?.startsWith("/painel/config/perfil") && (
+          <header className="app-shell__topbar">
+            <div className="app-shell__topbar-left">
+              <div className="app-shell__topbar-title">Visao de Portfolio</div>
+              <div className="app-shell__topbar-sub">
+                Acompanhe JBP, campanhas, execucao em loja e resultados em uma visao unica.
+              </div>
             </div>
-          </div>
 
-          <div className="app-shell__topbar-right">
-            <span className="app-shell__env-tag">
-              • Ambiente de demonstração
-            </span>
-            <button type="button" className="app-shell__primary-cta">
-              + Nova campanha
-            </button>
-            <div className="app-shell__user-chip">KS</div>
-          </div>
-        </header>
+            <div className="app-shell__topbar-right">
+              <span className="app-shell__env-tag">- Ambiente de demonstracao</span>
+              <button type="button" className="app-shell__primary-cta">
+                + Nova campanha
+              </button>
+              <div className="app-shell__user-menu" ref={menuRef}>
+                <button
+                  type="button"
+                  className="app-shell__user-chip"
+                  onClick={() => setMenuOpen((v) => !v)}
+                  aria-haspopup="true"
+                  aria-expanded={menuOpen}
+                >
+                  {userPhoto ? <img src={userPhoto} alt={userName} /> : getInitials(userName)}
+                </button>
+                {menuOpen && (
+                  <div className="app-shell__user-popover">
+                    <div className="app-shell__user-header">
+                      <div className="app-shell__user-avatar">
+                        {userPhoto ? <img src={userPhoto} alt={userName} /> : getInitials(userName)}
+                      </div>
+                      <div>
+                        <div className="app-shell__user-name">{userName}</div>
+                        <div className="app-shell__user-role">{userRole}</div>
+                      </div>
+                    </div>
+
+                    <div className="app-shell__user-actions">
+                      <button
+                        type="button"
+                        className="app-shell__user-action"
+                        onClick={() => {
+                          setShowProfileModal(true);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        Perfil
+                      </button>
+                      <button
+                        type="button"
+                        className="app-shell__user-action"
+                        onClick={() => {
+                          setShowPhotoModal(true);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        Adicionar foto de perfil
+                      </button>
+                      <button
+                        type="button"
+                        className="app-shell__user-action"
+                        onClick={() => {
+                          setShowPasswordModal(true);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        Trocar senha
+                      </button>
+                    </div>
+
+                    <div className="app-shell__user-theme">
+                      <span>Tema</span>
+                      <div className="app-shell__theme-switch">
+                        <button
+                          type="button"
+                          className={"app-shell__theme-pill" + (theme === "light" ? " is-active" : "")}
+                          onClick={() => toggleTheme("light")}
+                        >
+                          Light
+                        </button>
+                        <button
+                          type="button"
+                          className={"app-shell__theme-pill" + (theme === "dark" ? " is-active" : "")}
+                          onClick={() => toggleTheme("dark")}
+                        >
+                          Dark
+                        </button>
+                      </div>
+                    </div>
+
+                    <button type="button" className="app-shell__user-logout" onClick={handleLogout}>
+                      Sair
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </header>
+        )}
 
         <main className="app-shell__content">{children}</main>
       </div>
+
+      {showProfileModal && (
+        <Modal onClose={() => setShowProfileModal(false)} title="Perfil">
+          <div className="modal-section">
+            <div className="modal-avatar">{getInitials(userName)}</div>
+            <div className="modal-user-info">
+              <div className="modal-user-name">{userName}</div>
+              <div className="modal-user-role">{userRole}</div>
+            </div>
+          </div>
+          <div className="modal-grid">
+            <div>
+              <label className="modal-label">Nome</label>
+              <div className="modal-value">{userName}</div>
+            </div>
+            <div>
+              <label className="modal-label">Login</label>
+              <div className="modal-value">{userLogin || "-"}</div>
+            </div>
+            <div>
+              <label className="modal-label">Email</label>
+              <div className="modal-value">{userEmail || "-"}</div>
+            </div>
+            <div>
+              <label className="modal-label">Perfil</label>
+              <div className="modal-value">{userRole}</div>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="modal-link" onClick={() => goToProfile()}>
+              Abrir pagina completa de perfil
+            </button>
+            <button type="button" className="modal-close" onClick={() => setShowProfileModal(false)}>
+              Fechar
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showPhotoModal && (
+        <Modal onClose={() => setShowPhotoModal(false)} title="Adicionar foto de perfil">
+          <form
+            className="modal-form"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setPhotoMsg("");
+              if (!photoFile) {
+                setPhotoMsg("Selecione uma imagem para enviar.");
+                return;
+              }
+              try {
+                setPhotoSaving(true);
+                // aqui voce integra com sua API: ex: POST `${apiBaseUrl}/api/usuarios/me/foto`
+                await new Promise((res) => setTimeout(res, 600));
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const result = typeof reader.result === "string" ? reader.result : null;
+                  if (result) {
+                    localStorage.setItem("conexao_trade_user_photo", result);
+                    setPhotoPreview(result);
+                    setUserPhoto(result);
+                  }
+                  setPhotoMsg("Foto atualizada com sucesso.");
+                  setPhotoSaving(false);
+                };
+                reader.readAsDataURL(photoFile);
+              } catch (err) {
+                console.error(err);
+                setPhotoMsg("Erro ao salvar foto. Tente novamente.");
+                setPhotoSaving(false);
+              }
+            }}
+          >
+            <div className="modal-upload">
+              {photoPreview ? (
+                <img src={photoPreview} alt="Preview" className="modal-photo-preview" />
+              ) : (
+                <div className="modal-photo-placeholder">{getInitials(userName)}</div>
+              )}
+              <label className="modal-upload-btn">
+                Escolher arquivo
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setPhotoFile(file);
+                    if (file) {
+                      setPhotoPreview(URL.createObjectURL(file));
+                    }
+                  }}
+                />
+              </label>
+            </div>
+            {photoMsg && <div className="modal-feedback">{photoMsg}</div>}
+            <div className="modal-actions">
+              <button type="button" className="modal-close" onClick={() => setShowPhotoModal(false)}>
+                Cancelar
+              </button>
+              <button type="submit" className="modal-submit" disabled={photoSaving}>
+                {photoSaving ? "Salvando..." : "Salvar"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {showPasswordModal && (
+        <Modal onClose={() => setShowPasswordModal(false)} title="Trocar senha">
+          <form
+            className="modal-form"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const atual = String(formData.get("senhaAtual") || "");
+              const nova = String(formData.get("novaSenha") || "");
+              const confirmar = String(formData.get("confirmarSenha") || "");
+              setPasswordError("");
+              setPasswordMsg("");
+
+              if (!atual || !nova || !confirmar) {
+                setPasswordError("Preencha todas as senhas.");
+                return;
+              }
+              if (nova !== confirmar) {
+                setPasswordError("Nova senha e confirmacao nao conferem.");
+                return;
+              }
+
+              try {
+                setPasswordSaving(true);
+                // aqui voce integra com sua API: ex: PUT `${apiBaseUrl}/api/usuarios/me/senha`
+                await new Promise((res) => setTimeout(res, 600));
+                setPasswordMsg("Senha atualizada com sucesso.");
+              } catch (err) {
+                console.error(err);
+                setPasswordError("Erro ao atualizar senha. Tente novamente.");
+              } finally {
+                setPasswordSaving(false);
+              }
+            }}
+          >
+            <label className="modal-label">Senha atual</label>
+            <input type="password" name="senhaAtual" className="modal-input" />
+
+            <label className="modal-label">Nova senha</label>
+            <input type="password" name="novaSenha" className="modal-input" />
+
+            <label className="modal-label">Confirmar nova senha</label>
+            <input type="password" name="confirmarSenha" className="modal-input" />
+
+            {passwordError && <div className="modal-feedback error">{passwordError}</div>}
+            {passwordMsg && <div className="modal-feedback success">{passwordMsg}</div>}
+
+            <div className="modal-actions">
+              <button type="button" className="modal-close" onClick={() => setShowPasswordModal(false)}>
+                Cancelar
+              </button>
+              <button type="submit" className="modal-submit" disabled={passwordSaving}>
+                {passwordSaving ? "Salvando..." : "Salvar"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }
 
-function NavGroup({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
+function NavGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div style={{ marginBottom: 8 }}>
       <div className="app-shell__nav-group-title">{title}</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {children}
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{children}</div>
+    </div>
+  );
+}
+
+function Modal({ onClose, title, children }: { onClose: () => void; title: string; children: ReactNode }) {
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <div className="modal-card">
+        <div className="modal-header">
+          <h3 className="modal-title">{title}</h3>
+          <button type="button" className="modal-close-btn" onClick={onClose} aria-label="Fechar modal">
+            x
+          </button>
+        </div>
+        <div className="modal-body">{children}</div>
       </div>
     </div>
   );
@@ -169,17 +535,10 @@ function NavItem({
   icon?: ReactNode;
   children: ReactNode;
 }) {
-  const isActive =
-    pathname === href || (pathname || "").startsWith(href + "/");
+  const isActive = pathname === href || (pathname || "").startsWith(href + "/");
 
   return (
-    <Link
-      href={href}
-      className={
-        "app-shell__nav-item" +
-        (isActive ? " app-shell__nav-item--active" : "")
-      }
-    >
+    <Link href={href} className={"app-shell__nav-item" + (isActive ? " app-shell__nav-item--active" : "")}>
       {icon && <span className="app-shell__nav-item-icon">{icon}</span>}
       <span className="app-shell__nav-label">{children}</span>
     </Link>

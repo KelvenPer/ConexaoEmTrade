@@ -226,4 +226,5 @@ model TBLUSER {
   role         String   @default("user")
   status       String   @default("ativo")
   createdAt    DateTime @default(now())
+  photoUrl     String?
 }
