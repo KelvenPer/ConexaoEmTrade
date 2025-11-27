@@ -1,0 +1,101 @@
+-- Multi-tenant migration with backfill for existing data
+
+-- Enums
+CREATE TYPE "TenantType" AS ENUM ('INTERNAL', 'INDUSTRIA', 'VAREJO');
+CREATE TYPE "UserRole" AS ENUM ('PLATFORM_ADMIN', 'TENANT_ADMIN', 'USER');
+CREATE TYPE "AccessChannel" AS ENUM ('industria', 'varejo', 'interno');
+
+-- Tables
+CREATE TABLE "TBLTENANT" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "type" "TenantType" NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'ativo',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "TBLTENANT_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE "TBLRETAIL" (
+    "id" SERIAL NOT NULL,
+    "tenantId" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "document" TEXT,
+    "segment" TEXT,
+    "channel" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'ativo',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "TBLRETAIL_pkey" PRIMARY KEY ("id")
+);
+
+-- New nullable columns to allow backfill
+ALTER TABLE "TBLFORN" ADD COLUMN "tenantId" INTEGER;
+ALTER TABLE "TBLCAMPANHA" ADD COLUMN "retailId" INTEGER;
+ALTER TABLE "TBLEXECPLANO" ADD COLUMN "retailId" INTEGER;
+ALTER TABLE "TBLJBP" ADD COLUMN "retailId" INTEGER;
+ALTER TABLE "TBLRETAILMEDIA_PLANO" ADD COLUMN "retailId" INTEGER;
+ALTER TABLE "TBLVENDASRESUMO" ADD COLUMN "retailId" INTEGER;
+ALTER TABLE "TBLUSER" ADD COLUMN "retailId" INTEGER, ADD COLUMN "tenantId" INTEGER;
+
+-- Convert existing role/accessChannel to enums (preserves data best-effort)
+ALTER TABLE "TBLUSER" ALTER COLUMN "role" DROP DEFAULT;
+ALTER TABLE "TBLUSER" ALTER COLUMN "accessChannel" DROP DEFAULT;
+
+ALTER TABLE "TBLUSER"
+  ALTER COLUMN "role" TYPE "UserRole" USING (
+    CASE LOWER("role")
+      WHEN 'platform_admin' THEN 'PLATFORM_ADMIN'
+      WHEN 'tenant_admin' THEN 'TENANT_ADMIN'
+      WHEN 'admin' THEN 'PLATFORM_ADMIN'
+      WHEN 'user' THEN 'USER'
+      ELSE 'USER'
+    END
+  )::"UserRole";
+ALTER TABLE "TBLUSER" ALTER COLUMN "role" SET DEFAULT 'USER';
+
+ALTER TABLE "TBLUSER"
+  ALTER COLUMN "accessChannel" TYPE "AccessChannel" USING (
+    CASE LOWER("accessChannel")
+      WHEN 'varejo' THEN 'varejo'
+      WHEN 'interno' THEN 'interno'
+      WHEN 'industria' THEN 'industria'
+      ELSE 'industria'
+    END
+  )::"AccessChannel";
+ALTER TABLE "TBLUSER" ALTER COLUMN "accessChannel" SET DEFAULT 'industria';
+
+-- Seed default tenant and backfill existing rows
+WITH inserted AS (
+  INSERT INTO "TBLTENANT" ("name", "type", "status", "createdAt", "updatedAt")
+  VALUES ('Default Tenant', 'INTERNAL', 'ativo', now(), now())
+  RETURNING id
+),
+tenant_row AS (
+  SELECT id FROM inserted
+  UNION ALL
+  SELECT id FROM "TBLTENANT" WHERE name = 'Default Tenant' ORDER BY id LIMIT 1
+)
+UPDATE "TBLFORN" SET "tenantId" = (SELECT id FROM tenant_row LIMIT 1) WHERE "tenantId" IS NULL;
+
+WITH tenant_row AS (
+  SELECT id FROM "TBLTENANT" WHERE name = 'Default Tenant' ORDER BY id LIMIT 1
+)
+UPDATE "TBLUSER" SET "tenantId" = (SELECT id FROM tenant_row LIMIT 1) WHERE "tenantId" IS NULL;
+
+-- Default existing users to platform admin to preserve access
+UPDATE "TBLUSER" SET "role" = 'PLATFORM_ADMIN' WHERE "role" IS NULL;
+
+-- Enforce NOT NULL and add FKs
+ALTER TABLE "TBLFORN" ALTER COLUMN "tenantId" SET NOT NULL;
+ALTER TABLE "TBLUSER" ALTER COLUMN "tenantId" SET NOT NULL;
+
+ALTER TABLE "TBLFORN" ADD CONSTRAINT "TBLFORN_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "TBLTENANT"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "TBLRETAIL" ADD CONSTRAINT "TBLRETAIL_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "TBLTENANT"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "TBLJBP" ADD CONSTRAINT "TBLJBP_retailId_fkey" FOREIGN KEY ("retailId") REFERENCES "TBLRETAIL"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "TBLCAMPANHA" ADD CONSTRAINT "TBLCAMPANHA_retailId_fkey" FOREIGN KEY ("retailId") REFERENCES "TBLRETAIL"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "TBLEXECPLANO" ADD CONSTRAINT "TBLEXECPLANO_retailId_fkey" FOREIGN KEY ("retailId") REFERENCES "TBLRETAIL"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "TBLRETAILMEDIA_PLANO" ADD CONSTRAINT "TBLRETAILMEDIA_PLANO_retailId_fkey" FOREIGN KEY ("retailId") REFERENCES "TBLRETAIL"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "TBLVENDASRESUMO" ADD CONSTRAINT "TBLVENDASRESUMO_retailId_fkey" FOREIGN KEY ("retailId") REFERENCES "TBLRETAIL"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "TBLUSER" ADD CONSTRAINT "TBLUSER_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "TBLTENANT"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "TBLUSER" ADD CONSTRAINT "TBLUSER_retailId_fkey" FOREIGN KEY ("retailId") REFERENCES "TBLRETAIL"("id") ON DELETE SET NULL ON UPDATE CASCADE;

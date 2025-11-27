@@ -1,10 +1,31 @@
 // backend/src/routes/users.js
 const express = require("express");
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
+const { AccessChannel, UserRole } = require("@prisma/client");
 const prisma = require("../prisma");
+const { resolveTenantContext } = require("../auth/tenantContext");
+const { normalizeChannel, buildMultiTenantWhere } = require("../auth/multiTenantFilter");
+const { getUserFromRequest } = require("../auth/token");
 
 const router = express.Router();
+
+function requireAuth(req, res) {
+  const user = getUserFromRequest(req);
+  if (!user) {
+    res.status(401).json({ message: "Token ausente ou invalido." });
+    return null;
+  }
+  return user;
+}
+
+function assertCanManageUsers(currentUser) {
+  if (
+    currentUser.role !== UserRole.PLATFORM_ADMIN &&
+    currentUser.role !== UserRole.TENANT_ADMIN
+  ) {
+    throw new Error("Apenas PLATFORM_ADMIN ou TENANT_ADMIN podem gerenciar usuarios.");
+  }
+}
 
 /**
  * GET /api/usuarios
@@ -12,7 +33,13 @@ const router = express.Router();
  */
 router.get("/", async (_req, res) => {
   try {
+    const user = requireAuth(_req, res);
+    if (!user) return;
+
+    const where = buildMultiTenantWhere(user, {});
+
     const usuarios = await prisma.TBLUSER.findMany({
+      where,
       orderBy: { name: "asc" },
       select: {
         id: true,
@@ -24,6 +51,8 @@ router.get("/", async (_req, res) => {
         photoUrl: true,
         accessChannel: true,
         supplierId: true,
+        retailId: true,
+        tenantId: true,
         createdAt: true,
       },
     });
@@ -41,21 +70,12 @@ router.get("/", async (_req, res) => {
  */
 router.get("/me", async (req, res) => {
   try {
-    const auth = req.headers.authorization;
-    if (!auth || !auth.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "Token ausente." });
-    }
-    const token = auth.replace("Bearer ", "");
+    const decoded = requireAuth(req, res);
+    if (!decoded) return;
 
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch {
-      return res.status(401).json({ message: "Token invalido." });
-    }
-
+    const userId = decoded.sub || decoded.id;
     const usuario = await prisma.TBLUSER.findUnique({
-      where: { id: decoded.id },
+      where: { id: userId },
       select: {
         id: true,
         name: true,
@@ -66,6 +86,8 @@ router.get("/me", async (req, res) => {
         photoUrl: true,
         accessChannel: true,
         supplierId: true,
+        retailId: true,
+        tenantId: true,
         createdAt: true,
       },
     });
@@ -87,13 +109,16 @@ router.get("/me", async (req, res) => {
  */
 router.get("/:id", async (req, res) => {
   try {
+    const currentUser = requireAuth(req, res);
+    if (!currentUser) return;
+
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
       return res.status(400).json({ message: "ID invalido." });
     }
 
-    const usuario = await prisma.TBLUSER.findUnique({
-      where: { id },
+    const usuario = await prisma.TBLUSER.findFirst({
+      where: buildMultiTenantWhere(currentUser, { id }),
       select: {
         id: true,
         name: true,
@@ -102,6 +127,10 @@ router.get("/:id", async (req, res) => {
         role: true,
         status: true,
         photoUrl: true,
+        accessChannel: true,
+        supplierId: true,
+        retailId: true,
+        tenantId: true,
         createdAt: true,
       },
     });
@@ -123,6 +152,10 @@ router.get("/:id", async (req, res) => {
  */
 router.post("/", async (req, res) => {
   try {
+    const currentUser = requireAuth(req, res);
+    if (!currentUser) return;
+    assertCanManageUsers(currentUser);
+
     const {
       name,
       email,
@@ -133,6 +166,8 @@ router.post("/", async (req, res) => {
       photoUrl,
       accessChannel,
       supplierId,
+      retailId,
+      tenantId,
     } = req.body;
 
     if (!name || !email || !login || !password) {
@@ -159,6 +194,39 @@ router.post("/", async (req, res) => {
         .json({ message: "Ja existe um usuario com este login." });
     }
 
+    // Regras de tenant: PLATFORM_ADMIN cria qualquer tenant; TENANT_ADMIN apenas no seu tenant/canal.
+    const targetTenant = tenantId || currentUser.tenantId;
+    const channel = normalizeChannel(
+      accessChannel || (retailId ? AccessChannel.varejo : AccessChannel.industria)
+    );
+
+    if (currentUser.role === UserRole.TENANT_ADMIN) {
+      if (Number(targetTenant) !== Number(currentUser.tenantId)) {
+        return res.status(403).json({ message: "Tenant invalido para este admin." });
+      }
+      if (channel === AccessChannel.industria && currentUser.supplierId) {
+        if (supplierId && Number(supplierId) !== Number(currentUser.supplierId)) {
+          return res.status(403).json({ message: "supplierId diferente do admin atual." });
+        }
+      }
+      if (channel === AccessChannel.varejo && currentUser.retailId) {
+        if (retailId && Number(retailId) !== Number(currentUser.retailId)) {
+          return res.status(403).json({ message: "retailId diferente do admin atual." });
+        }
+      }
+    }
+
+    let tenantContext;
+    try {
+      tenantContext = await resolveTenantContext({
+        tenantId: targetTenant,
+        supplierId,
+        retailId,
+      });
+    } catch (e) {
+      return res.status(400).json({ message: e.message });
+    }
+
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
@@ -168,11 +236,13 @@ router.post("/", async (req, res) => {
         email,
         login,
         passwordHash,
-        role: role || "user",
+        role: role || "USER",
         status: status || "ativo",
         photoUrl: photoUrl || null,
-        accessChannel: accessChannel === "varejo" ? "varejo" : "industria",
-        supplierId: Number.isInteger(supplierId) ? supplierId : null,
+        accessChannel: channel,
+        tenantId: tenantContext.tenantId,
+        supplierId: tenantContext.supplierId || null,
+        retailId: tenantContext.retailId || null,
       },
       select: {
         id: true,
@@ -184,6 +254,8 @@ router.post("/", async (req, res) => {
         photoUrl: true,
         accessChannel: true,
         supplierId: true,
+        retailId: true,
+        tenantId: true,
         createdAt: true,
       },
     });
@@ -204,6 +276,10 @@ router.post("/", async (req, res) => {
  */
 router.put("/:id", async (req, res) => {
   try {
+    const currentUser = requireAuth(req, res);
+    if (!currentUser) return;
+    assertCanManageUsers(currentUser);
+
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
       return res.status(400).json({ message: "ID invalido." });
@@ -218,10 +294,12 @@ router.put("/:id", async (req, res) => {
       photoUrl,
       accessChannel,
       supplierId,
+      retailId,
+      tenantId,
     } = req.body;
 
-    const usuarioAtual = await prisma.TBLUSER.findUnique({
-      where: { id },
+    const usuarioAtual = await prisma.TBLUSER.findFirst({
+      where: buildMultiTenantWhere(currentUser, { id }),
     });
 
     if (!usuarioAtual) {
@@ -260,6 +338,38 @@ router.put("/:id", async (req, res) => {
       passwordHash = await bcrypt.hash(password, salt);
     }
 
+    const targetTenant = tenantId ?? usuarioAtual.tenantId;
+    const channel = normalizeChannel(
+      accessChannel ?? usuarioAtual.accessChannel ?? AccessChannel.industria
+    );
+
+    if (currentUser.role === UserRole.TENANT_ADMIN) {
+      if (Number(targetTenant) !== Number(currentUser.tenantId)) {
+        return res.status(403).json({ message: "Tenant invalido para este admin." });
+      }
+      if (channel === AccessChannel.industria && currentUser.supplierId) {
+        if (supplierId && Number(supplierId) !== Number(currentUser.supplierId)) {
+          return res.status(403).json({ message: "supplierId diferente do admin atual." });
+        }
+      }
+      if (channel === AccessChannel.varejo && currentUser.retailId) {
+        if (retailId && Number(retailId) !== Number(currentUser.retailId)) {
+          return res.status(403).json({ message: "retailId diferente do admin atual." });
+        }
+      }
+    }
+
+    let tenantContext;
+    try {
+      tenantContext = await resolveTenantContext({
+        tenantId: targetTenant,
+        supplierId: supplierId ?? usuarioAtual.supplierId,
+        retailId: retailId ?? usuarioAtual.retailId,
+      });
+    } catch (e) {
+      return res.status(400).json({ message: e.message });
+    }
+
     const usuarioAtualizado = await prisma.TBLUSER.update({
       where: { id },
       data: {
@@ -269,13 +379,12 @@ router.put("/:id", async (req, res) => {
         role: role ?? usuarioAtual.role,
         status: status ?? usuarioAtual.status,
         photoUrl: photoUrl ?? usuarioAtual.photoUrl,
-        accessChannel:
-          accessChannel ??
-          usuarioAtual.accessChannel ??
-          "industria",
-        supplierId: Number.isInteger(supplierId)
-          ? supplierId
-          : usuarioAtual.supplierId,
+        accessChannel: channel,
+        tenantId: tenantContext.tenantId,
+        supplierId:
+          supplierId !== undefined ? tenantContext.supplierId : usuarioAtual.supplierId,
+        retailId:
+          retailId !== undefined ? tenantContext.retailId : usuarioAtual.retailId,
         passwordHash,
       },
       select: {
@@ -288,6 +397,8 @@ router.put("/:id", async (req, res) => {
         photoUrl: true,
         accessChannel: true,
         supplierId: true,
+        retailId: true,
+        tenantId: true,
         createdAt: true,
       },
     });
@@ -308,13 +419,17 @@ router.put("/:id", async (req, res) => {
  */
 router.delete("/:id", async (req, res) => {
   try {
+    const currentUser = requireAuth(req, res);
+    if (!currentUser) return;
+    assertCanManageUsers(currentUser);
+
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
       return res.status(400).json({ message: "ID invalido." });
     }
 
-    const usuario = await prisma.TBLUSER.findUnique({
-      where: { id },
+    const usuario = await prisma.TBLUSER.findFirst({
+      where: buildMultiTenantWhere(currentUser, { id }),
     });
 
     if (!usuario) {

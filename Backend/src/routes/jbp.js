@@ -1,6 +1,8 @@
 // backend/src/routes/jbp.js
 const express = require("express");
 const prisma = require("../prisma");
+const { getUserFromRequest } = require("../auth/token");
+const { buildMultiTenantWhere } = require("../auth/multiTenantFilter");
 
 const router = express.Router();
 
@@ -10,19 +12,26 @@ const router = express.Router();
  */
 router.get("/", async (req, res) => {
   try {
+    const user = getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ message: "Token ausente ou invalido." });
+    }
+
     const { year, supplierId } = req.query;
 
-    const where = {};
+    const baseWhere = {};
 
     if (year) {
       const y = Number(year);
-      if (!Number.isNaN(y)) where.year = y;
+      if (!Number.isNaN(y)) baseWhere.year = y;
     }
 
     if (supplierId) {
       const s = Number(supplierId);
-      if (!Number.isNaN(s)) where.supplierId = s;
+      if (!Number.isNaN(s)) baseWhere.supplierId = s;
     }
+
+    const where = buildMultiTenantWhere(user, baseWhere);
 
     const jbps = await prisma.TBLJBP.findMany({
       where,
@@ -49,14 +58,19 @@ router.get("/", async (req, res) => {
  */
 router.get("/:id", async (req, res) => {
   try {
+    const user = getUserFromRequest(req);
+    if (!user) {
+      return res.status(401).json({ message: "Token ausente ou inválido." });
+    }
+
     const id = Number(req.params.id);
 
     if (Number.isNaN(id)) {
-      return res.status(400).json({ message: "ID inválido." });
+      return res.status(400).json({ message: "ID invalido." });
     }
 
-    const jbp = await prisma.TBLJBP.findUnique({
-      where: { id },
+    const jbp = await prisma.TBLJBP.findFirst({
+      where: buildMultiTenantWhere(user, { id }),
       include: {
         supplier: true,
         itens: {

@@ -7,8 +7,52 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// =========================
+// Enums
+// =========================
+
+enum TenantType {
+  INTERNAL   // você / plataforma
+  INDUSTRIA  // indústria (Nestlé, etc.)
+  VAREJO     // varejo (rede/loja)
+}
+
+enum UserRole {
+  PLATFORM_ADMIN   // dono da plataforma (você)
+  TENANT_ADMIN     // admin dentro do tenant (Nestlé, Varejo X)
+  USER             // usuário comum
+}
+
+enum AccessChannel {
+  industria
+  varejo
+  interno
+}
+
+// =========================
+// Tenant / Organização
+// =========================
+
+model TBLTENANT {
+  id        Int        @id @default(autoincrement())
+  name      String
+  type      TenantType
+  status    String     @default("ativo")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  users     TBLUSER[]
+  suppliers TBLFORN[]
+  retailers TBLRETAIL[]
+}
+
+// =========================
+// Indústria (Fornecedor)
+// =========================
+
 model TBLFORN {
   id        Int      @id @default(autoincrement())
+  tenantId  Int
   name      String
   document  String?
   segment   String?
@@ -17,6 +61,8 @@ model TBLFORN {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  tenant        TBLTENANT             @relation(fields: [tenantId], references: [id])
+
   jbps          TBLJBP[]
   campanhas     TBLCAMPANHA[]
   execPlanos    TBLEXECPLANO[]
@@ -24,6 +70,35 @@ model TBLFORN {
   vendasResumos TBLVENDASRESUMO[]
   users         TBLUSER[]
 }
+
+// =========================
+// Varejo
+// =========================
+
+model TBLRETAIL {
+  id        Int      @id @default(autoincrement())
+  tenantId  Int
+  name      String
+  document  String?
+  segment   String?
+  channel   String?
+  status    String   @default("ativo")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant        TBLTENANT             @relation(fields: [tenantId], references: [id])
+
+  jbps          TBLJBP[]
+  campanhas     TBLCAMPANHA[]
+  execPlanos    TBLEXECPLANO[]
+  retailPlanos  TBLRETAILMEDIA_PLANO[]
+  vendasResumos TBLVENDASRESUMO[]
+  users         TBLUSER[]
+}
+
+// =========================
+// Ativos / Formatos
+// =========================
 
 model TBLATV {
   id          Int      @id @default(autoincrement())
@@ -45,9 +120,14 @@ model TBLATV {
   retailMediaItens TBLRETAILMEDIA_ITEM[]
 }
 
+// =========================
+// JBP
+// =========================
+
 model TBLJBP {
   id          Int       @id @default(autoincrement())
   supplierId  Int
+  retailId    Int?
   name        String
   year        Int?
   periodStart DateTime?
@@ -57,11 +137,12 @@ model TBLJBP {
   totalBudget Float?
   status      String    @default("rascunho")
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   createdById Int?
 
-  supplier TBLFORN      @relation(fields: [supplierId], references: [id])
+  supplier TBLFORN    @relation(fields: [supplierId], references: [id])
+  retail   TBLRETAIL? @relation(fields: [retailId], references: [id])
   itens    TBLJBPITEM[]
 
   campanhas     TBLCAMPANHA[]
@@ -93,21 +174,27 @@ model TBLJBPITEM {
   retailMediaItens TBLRETAILMEDIA_ITEM[]
 }
 
+// =========================
+// Campanhas
+// =========================
+
 model TBLCAMPANHA {
   id         Int       @id @default(autoincrement())
   supplierId Int
+  retailId   Int?
   jbpId      Int?
   name       String
   objective  String?
-  channel    String? // "LOJA_FISICA", "ECOMMERCE", "APP", etc.
+  channel    String?   // "LOJA_FISICA", "ECOMMERCE", "APP", etc.
   startDate  DateTime?
   endDate    DateTime?
   status     String    @default("planejada") // planejada, em_producao, aprovada, veiculando, encerrada
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
-  supplier TBLFORN           @relation(fields: [supplierId], references: [id])
-  jbp      TBLJBP?           @relation(fields: [jbpId], references: [id])
+  supplier TBLFORN    @relation(fields: [supplierId], references: [id])
+  retail   TBLRETAIL? @relation(fields: [retailId], references: [id])
+  jbp      TBLJBP?    @relation(fields: [jbpId], references: [id])
   itens    TBLCAMPANHAITEM[]
 }
 
@@ -132,9 +219,14 @@ model TBLCAMPANHAITEM {
   asset    TBLATV      @relation(fields: [assetId], references: [id])
 }
 
+// =========================
+// Execução de Plano
+// =========================
+
 model TBLEXECPLANO {
   id          Int       @id @default(autoincrement())
   supplierId  Int
+  retailId    Int?
   jbpId       Int?
   name        String
   periodStart DateTime?
@@ -143,8 +235,9 @@ model TBLEXECPLANO {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  supplier TBLFORN         @relation(fields: [supplierId], references: [id])
-  jbp      TBLJBP?         @relation(fields: [jbpId], references: [id])
+  supplier TBLFORN    @relation(fields: [supplierId], references: [id])
+  retail   TBLRETAIL? @relation(fields: [retailId], references: [id])
+  jbp      TBLJBP?    @relation(fields: [jbpId], references: [id])
   tarefas  TBLEXECTAREFA[]
 }
 
@@ -153,7 +246,7 @@ model TBLEXECTAREFA {
   planoExecId Int
   jbpItemId   Int?
   assetId     Int
-  storeScope  String // "Todas as lojas", "Top 50", "Loja 001", etc.
+  storeScope  String    // "Todas as lojas", "Top 50", "Loja 001", etc.
   checklist   String?
   deadline    DateTime?
   status      String    @default("pendente") // pendente, em_execucao, concluida
@@ -165,20 +258,26 @@ model TBLEXECTAREFA {
   asset     TBLATV       @relation(fields: [assetId], references: [id])
 }
 
+// =========================
+// Retail Media
+// =========================
+
 model TBLRETAILMEDIA_PLANO {
   id          Int       @id @default(autoincrement())
   supplierId  Int
+  retailId    Int?
   jbpId       Int?
   name        String
-  channel     String // "ECOMMERCE", "APP"
+  channel     String    // "ECOMMERCE", "APP"
   periodStart DateTime?
   periodEnd   DateTime?
   status      String    @default("planejado")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  supplier TBLFORN               @relation(fields: [supplierId], references: [id])
-  jbp      TBLJBP?               @relation(fields: [jbpId], references: [id])
+  supplier TBLFORN    @relation(fields: [supplierId], references: [id])
+  retail   TBLRETAIL? @relation(fields: [retailId], references: [id])
+  jbp      TBLJBP?    @relation(fields: [jbpId], references: [id])
   itens    TBLRETAILMEDIA_ITEM[]
 }
 
@@ -201,9 +300,14 @@ model TBLRETAILMEDIA_ITEM {
   asset       TBLATV               @relation(fields: [assetId], references: [id])
 }
 
+// =========================
+// Vendas Resumo
+// =========================
+
 model TBLVENDASRESUMO {
   id           Int     @id @default(autoincrement())
   supplierId   Int
+  retailId     Int?
   jbpId        Int?
   ano          Int
   mes          Int
@@ -214,22 +318,31 @@ model TBLVENDASRESUMO {
   marketShare  Float?
   notes        String?
 
-  supplier TBLFORN @relation(fields: [supplierId], references: [id])
-  jbp      TBLJBP? @relation(fields: [jbpId], references: [id])
+  supplier TBLFORN    @relation(fields: [supplierId], references: [id])
+  retail   TBLRETAIL? @relation(fields: [retailId], references: [id])
+  jbp      TBLJBP?    @relation(fields: [jbpId], references: [id])
 }
 
-model TBLUSER {
-  id           Int      @id @default(autoincrement())
-  name         String
-  email        String   @unique
-  login        String?  @unique
-  passwordHash String
-  role         String   @default("user")
-  status       String   @default("ativo")
-  createdAt    DateTime @default(now())
-  photoUrl     String?
-  accessChannel String  @default("industria") // industria | varejo
-  supplierId    Int?
+// =========================
+// Usuários
+// =========================
 
-  supplier TBLFORN? @relation(fields: [supplierId], references: [id])
+model TBLUSER {
+  id            Int           @id @default(autoincrement())
+  name          String
+  email         String        @unique
+  login         String?       @unique
+  passwordHash  String
+  role          UserRole      @default(USER)
+  status        String        @default("ativo")
+  createdAt     DateTime      @default(now())
+  photoUrl      String?
+  accessChannel AccessChannel @default(industria)
+  tenantId      Int
+  supplierId    Int?
+  retailId      Int?
+
+  tenant   TBLTENANT  @relation(fields: [tenantId], references: [id])
+  supplier TBLFORN?   @relation(fields: [supplierId], references: [id])
+  retail   TBLRETAIL? @relation(fields: [retailId], references: [id])
 }
