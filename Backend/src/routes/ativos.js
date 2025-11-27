@@ -1,8 +1,28 @@
 // backend/src/routes/ativos.js
 const express = require("express");
+const { UserRole } = require("@prisma/client");
 const prisma = require("../prisma");
+const { getUserFromRequest } = require("../auth/token");
 
 const router = express.Router();
+
+function requireAuth(req, res) {
+  const user = getUserFromRequest(req);
+  if (!user) {
+    res.status(401).json({ message: "Token ausente ou invalido." });
+    return null;
+  }
+  return user;
+}
+
+function assertCanManage(currentUser) {
+  if (
+    currentUser.role !== UserRole.PLATFORM_ADMIN &&
+    currentUser.role !== UserRole.TENANT_ADMIN
+  ) {
+    throw new Error("Apenas admin pode gerenciar ativos.");
+  }
+}
 
 /**
  * GET /api/ativos
@@ -10,6 +30,9 @@ const router = express.Router();
  */
 router.get("/", async (req, res) => {
   try {
+    const user = requireAuth(req, res);
+    if (!user) return;
+
     const ativos = await prisma.TBLATV.findMany({
       orderBy: { name: "asc" },
     });
@@ -23,10 +46,12 @@ router.get("/", async (req, res) => {
 /**
  * GET /api/ativos/ativos
  * Lista apenas ativos com status = 'ativo'
- * (essa rota vamos usar depois em JBP/Campanhas)
  */
 router.get("/ativos", async (req, res) => {
   try {
+    const user = requireAuth(req, res);
+    if (!user) return;
+
     const ativos = await prisma.TBLATV.findMany({
       where: { status: "ativo" },
       orderBy: { name: "asc" },
@@ -44,6 +69,14 @@ router.get("/ativos", async (req, res) => {
  */
 router.post("/", async (req, res) => {
   try {
+    const currentUser = requireAuth(req, res);
+    if (!currentUser) return;
+    try {
+      assertCanManage(currentUser);
+    } catch (err) {
+      return res.status(403).json({ message: err.message });
+    }
+
     const {
       name,
       channel,
@@ -57,15 +90,11 @@ router.post("/", async (req, res) => {
     } = req.body;
 
     if (!name || !channel) {
-      return res
-        .status(400)
-        .json({ message: "Nome e canal são obrigatórios." });
+      return res.status(400).json({ message: "Nome e canal sao obrigatorios." });
     }
 
     const basePriceNumber =
-      basePrice !== undefined &&
-      basePrice !== null &&
-      basePrice !== ""
+      basePrice !== undefined && basePrice !== null && basePrice !== ""
         ? Number(basePrice)
         : null;
 
@@ -96,6 +125,14 @@ router.post("/", async (req, res) => {
  */
 router.put("/:id", async (req, res) => {
   try {
+    const currentUser = requireAuth(req, res);
+    if (!currentUser) return;
+    try {
+      assertCanManage(currentUser);
+    } catch (err) {
+      return res.status(403).json({ message: err.message });
+    }
+
     const id = Number(req.params.id);
     const {
       name,
@@ -114,13 +151,11 @@ router.put("/:id", async (req, res) => {
     });
 
     if (!existente) {
-      return res.status(404).json({ message: "Ativo não encontrado." });
+      return res.status(404).json({ message: "Ativo nao encontrado." });
     }
 
     const basePriceNumber =
-      basePrice !== undefined &&
-      basePrice !== null &&
-      basePrice !== ""
+      basePrice !== undefined && basePrice !== null && basePrice !== ""
         ? Number(basePrice)
         : existente.basePrice;
 
@@ -132,9 +167,7 @@ router.put("/:id", async (req, res) => {
         type: type ?? existente.type,
         format: format ?? existente.format,
         unit: unit ?? existente.unit,
-        basePrice: basePrice !== undefined
-          ? basePriceNumber
-          : existente.basePrice,
+        basePrice: basePrice !== undefined ? basePriceNumber : existente.basePrice,
         currency: currency ?? existente.currency,
         description: description ?? existente.description,
         status: status ?? existente.status,
@@ -151,10 +184,17 @@ router.put("/:id", async (req, res) => {
 /**
  * DELETE /api/ativos/:id
  * Exclui um ativo
- * (no futuro você pode trocar por "soft delete" se quiser)
  */
 router.delete("/:id", async (req, res) => {
   try {
+    const currentUser = requireAuth(req, res);
+    if (!currentUser) return;
+    try {
+      assertCanManage(currentUser);
+    } catch (err) {
+      return res.status(403).json({ message: err.message });
+    }
+
     const id = Number(req.params.id);
 
     const existente = await prisma.TBLATV.findUnique({
@@ -162,14 +202,14 @@ router.delete("/:id", async (req, res) => {
     });
 
     if (!existente) {
-      return res.status(404).json({ message: "Ativo não encontrado." });
+      return res.status(404).json({ message: "Ativo nao encontrado." });
     }
 
     await prisma.TBLATV.delete({
       where: { id },
     });
 
-    res.json({ message: "Ativo excluído com sucesso." });
+    res.json({ message: "Ativo excluido com sucesso." });
   } catch (error) {
     console.error("Erro ao excluir ativo:", error);
     res.status(500).json({ message: "Erro ao excluir ativo." });

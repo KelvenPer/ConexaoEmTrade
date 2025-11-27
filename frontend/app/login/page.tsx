@@ -61,8 +61,9 @@ export default function LoginPage() {
         return;
       }
 
-      if (data.token) {
-        localStorage.setItem("conexao_trade_token", data.token);
+      const token = data.access_token || data.token;
+      if (token) {
+        localStorage.setItem("conexao_trade_token", token);
         localStorage.setItem("conexao_trade_user", JSON.stringify(data.user));
       }
 

@@ -147,7 +147,10 @@ router.post("/login", async (req, res) => {
     const user = await prisma.TBLUSER.findFirst({
       where: {
         status: "ativo", // so usuarios ativos podem logar
-        OR: [{ login: credential }, { email: credential }],
+        OR: [
+          { login: { equals: credential, mode: "insensitive" } },
+          { email: { equals: credential, mode: "insensitive" } },
+        ],
       },
       select: {
         id: true,

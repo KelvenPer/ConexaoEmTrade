@@ -2,16 +2,28 @@
 
 import { useEffect, useState } from "react";
 
-export default function ConfigAtivosPage() {
-  const apiBaseUrl =
-    process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+type Ativo = {
+  id: number;
+  name: string;
+  channel: string;
+  type?: string | null;
+  format?: string | null;
+  unit?: string | null;
+  basePrice?: number | null;
+  currency?: string | null;
+  status: string;
+  description?: string | null;
+};
 
-  const [ativos, setAtivos] = useState([]);
+export default function ConfigAtivosPage() {
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+  const [ativos, setAtivos] = useState<Ativo[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
-  const [editingId, setEditingId] = useState(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -25,17 +37,32 @@ export default function ConfigAtivosPage() {
     description: "",
   });
 
+  function getTokenOrFail() {
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("conexao_trade_token")
+        : null;
+    return token || "";
+  }
+
   async function carregarAtivos() {
     try {
       setLoading(true);
       setErrorMsg("");
-      const res = await fetch(`${apiBaseUrl}/api/ativos`);
+      const token = getTokenOrFail();
+      if (!token) {
+        throw new Error("Token ausente. Faca login novamente.");
+      }
+
+      const res = await fetch(`${apiBaseUrl}/api/ativos`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.message || "Erro ao carregar ativos.");
       }
       setAtivos(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Erro ao carregar ativos.");
     } finally {
@@ -47,7 +74,7 @@ export default function ConfigAtivosPage() {
     carregarAtivos();
   }, []);
 
-  function handleChange(e) {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
     const { name, value } = e.target;
     setForm((prev) => ({
       ...prev,
@@ -72,7 +99,7 @@ export default function ConfigAtivosPage() {
     setSuccessMsg("");
   }
 
-  function handleEditar(ativo) {
+  function handleEditar(ativo: Ativo) {
     setEditingId(ativo.id);
     setForm({
       name: ativo.name || "",
@@ -92,21 +119,21 @@ export default function ConfigAtivosPage() {
     setSuccessMsg("");
   }
 
-  async function handleSalvar(e) {
+  async function handleSalvar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
 
     if (!form.name || !form.channel) {
-      setErrorMsg("Nome e canal são obrigatórios.");
+      setErrorMsg("Nome e canal sao obrigatorios.");
       return;
     }
 
-    let basePriceNumber = null;
+    let basePriceNumber: number | null = null;
     if (form.basePrice !== "") {
       const n = Number(form.basePrice);
       if (Number.isNaN(n)) {
-        setErrorMsg("Valor base inválido.");
+        setErrorMsg("Valor base invalido.");
         return;
       }
       basePriceNumber = n;
@@ -114,6 +141,10 @@ export default function ConfigAtivosPage() {
 
     try {
       setSaving(true);
+      const token = getTokenOrFail();
+      if (!token) {
+        throw new Error("Token ausente. Faca login novamente.");
+      }
 
       const payload = {
         name: form.name,
@@ -135,7 +166,10 @@ export default function ConfigAtivosPage() {
 
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(payload),
       });
 
@@ -146,16 +180,14 @@ export default function ConfigAtivosPage() {
       }
 
       setSuccessMsg(
-        editingId
-          ? "Ativo atualizado com sucesso."
-          : "Ativo criado com sucesso."
+        editingId ? "Ativo atualizado com sucesso." : "Ativo criado com sucesso."
       );
 
       await carregarAtivos();
       if (!editingId) {
         handleNovo();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Erro ao salvar ativo.");
     } finally {
@@ -163,39 +195,53 @@ export default function ConfigAtivosPage() {
     }
   }
 
-  async function handleExcluir(id) {
+  async function handleExcluir(id: number) {
     if (!window.confirm("Tem certeza que deseja excluir este ativo?")) return;
 
     try {
       setErrorMsg("");
       setSuccessMsg("");
+      const token = getTokenOrFail();
+      if (!token) {
+        throw new Error("Token ausente. Faca login novamente.");
+      }
+
       const res = await fetch(`${apiBaseUrl}/api/ativos/${id}`, {
         method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.message || "Erro ao excluir ativo.");
       }
-      setSuccessMsg("Ativo excluído com sucesso.");
+      setSuccessMsg("Ativo excluido com sucesso.");
       await carregarAtivos();
       if (editingId === id) {
         handleNovo();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Erro ao excluir ativo.");
     }
   }
 
-  async function handleToggleStatus(ativo) {
+  async function handleToggleStatus(ativo: Ativo) {
     const novoStatus = ativo.status === "ativo" ? "inativo" : "ativo";
 
     try {
       setErrorMsg("");
       setSuccessMsg("");
+      const token = getTokenOrFail();
+      if (!token) {
+        throw new Error("Token ausente. Faca login novamente.");
+      }
+
       const res = await fetch(`${apiBaseUrl}/api/ativos/${ativo.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ status: novoStatus }),
       });
       const data = await res.json();
@@ -204,7 +250,7 @@ export default function ConfigAtivosPage() {
       }
       setSuccessMsg("Status do ativo atualizado com sucesso.");
       await carregarAtivos();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Erro ao atualizar status.");
     }
@@ -223,9 +269,9 @@ export default function ConfigAtivosPage() {
         Ativos de Marketing & Trade
       </h1>
       <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>
-        Catálogo de ativos que o Super Maxi oferece para as indústrias:
-        pontas de gôndola, banners de e-commerce, TV de loja, app, etc. Esse
-        cadastro será usado em JBP, campanhas e visão do fornecedor.
+        Catalogo de ativos que o Super Maxi oferece para as industrias: pontas de
+        gondola, banners de e-commerce, TV de loja, app, etc. Esse cadastro sera
+        usado em JBP, campanhas e visao do fornecedor.
       </p>
 
       <div
@@ -236,7 +282,7 @@ export default function ConfigAtivosPage() {
           alignItems: "flex-start",
         }}
       >
-        {/* Formulário */}
+        {/* Formulario */}
         <section
           style={{
             backgroundColor: "#ffffff",
@@ -273,7 +319,7 @@ export default function ConfigAtivosPage() {
                   color: "#6b7280",
                 }}
               >
-                Limpar formulário
+                Limpar formulario
               </button>
             )}
           </div>
@@ -288,7 +334,7 @@ export default function ConfigAtivosPage() {
                 name="name"
                 value={form.name}
                 onChange={handleChange}
-                placeholder="Ex.: Ponta de Gôndola, Banner Home E-commerce"
+                placeholder="Ex.: Ponta de Gondola, Banner Home E-commerce"
                 style={inputStyle}
               />
             </Field>
@@ -301,7 +347,7 @@ export default function ConfigAtivosPage() {
                 style={inputStyle}
               >
                 <option value="">Selecione o canal</option>
-                <option value="LOJA_FISICA">Loja física</option>
+                <option value="LOJA_FISICA">Loja fisica</option>
                 <option value="ECOMMERCE">E-commerce</option>
                 <option value="APP">App</option>
                 <option value="JORNAL">Jornal / Impresso</option>
@@ -331,7 +377,7 @@ export default function ConfigAtivosPage() {
                 name="format"
                 value={form.format}
                 onChange={handleChange}
-                placeholder="Ex.: 970x250, vídeo 30s, cartaz A3"
+                placeholder="Ex.: 970x250, video 30s, cartaz A3"
                 style={inputStyle}
               />
             </Field>
@@ -342,7 +388,7 @@ export default function ConfigAtivosPage() {
                 name="unit"
                 value={form.unit}
                 onChange={handleChange}
-                placeholder="Ex.: por semana, por mês, por inserção"
+                placeholder="Ex.: por semana, por mes, por insercao"
                 style={inputStyle}
               />
             </Field>
@@ -383,12 +429,12 @@ export default function ConfigAtivosPage() {
               </select>
             </Field>
 
-            <Field label="Descrição / observações">
+            <Field label="Descricao / observacoes">
               <textarea
                 name="description"
                 value={form.description}
                 onChange={handleChange}
-                placeholder="Use este campo para detalhar o ativo: posição, regras, observações..."
+                placeholder="Use este campo para detalhar o ativo: posicao, regras, observacoes..."
                 rows={3}
                 style={{
                   ...inputStyle,
@@ -424,7 +470,7 @@ export default function ConfigAtivosPage() {
                   ? "Salvando..."
                   : "Criando..."
                 : editingId
-                ? "Salvar alterações"
+                ? "Salvar alteracoes"
                 : "Criar ativo"}
             </button>
           </form>
@@ -475,7 +521,7 @@ export default function ConfigAtivosPage() {
             <div style={{ fontSize: 13, color: "#6b7280" }}>Carregando...</div>
           ) : ativos.length === 0 ? (
             <div style={{ fontSize: 13, color: "#6b7280" }}>
-              Nenhum ativo cadastrado ainda. Use o formulário ao lado para
+              Nenhum ativo cadastrado ainda. Use o formulario ao lado para
               cadastrar os primeiros.
             </div>
           ) : (
@@ -500,7 +546,7 @@ export default function ConfigAtivosPage() {
                     <Th>Unidade</Th>
                     <Th>Valor base</Th>
                     <Th>Status</Th>
-                    <Th>Ações</Th>
+                    <Th>Acoes</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -540,8 +586,7 @@ export default function ConfigAtivosPage() {
                                 a.status === "ativo"
                                   ? "rgba(22,163,74,0.08)"
                                   : "rgba(148,163,184,0.18)",
-                              color:
-                                a.status === "ativo" ? "#15803d" : "#4b5563",
+                              color: a.status === "ativo" ? "#15803d" : "#4b5563",
                             }}
                           >
                             {a.status === "ativo" ? "Ativo" : "Inativo"}
@@ -591,7 +636,7 @@ export default function ConfigAtivosPage() {
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <label
@@ -608,7 +653,7 @@ function Field({ label, children }) {
   );
 }
 
-const inputStyle = {
+const inputStyle: React.CSSProperties = {
   padding: "7px 9px",
   borderRadius: 8,
   border: "1px solid #d1d5db",
@@ -616,7 +661,7 @@ const inputStyle = {
   outline: "none",
 };
 
-const Th = ({ children }) => (
+const Th = ({ children }: { children: React.ReactNode }) => (
   <th
     style={{
       padding: "6px 8px",
@@ -631,7 +676,7 @@ const Th = ({ children }) => (
   </th>
 );
 
-const Td = ({ children }) => (
+const Td = ({ children }: { children: React.ReactNode }) => (
   <td
     style={{
       padding: "6px 8px",
@@ -642,7 +687,7 @@ const Td = ({ children }) => (
   </td>
 );
 
-const smallButton = {
+const smallButton: React.CSSProperties = {
   border: "none",
   background: "none",
   fontSize: 11,

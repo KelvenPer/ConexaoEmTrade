@@ -38,7 +38,7 @@ export default function ConfigUsuariosPage() {
     login: "",
     email: "",
     password: "",
-    role: "user",
+    role: "USER",
     status: "ativo",
     accessChannel: "industria",
     supplierId: "",
@@ -50,11 +50,28 @@ export default function ConfigUsuariosPage() {
     return map;
   }, [fornecedores]);
 
+  function getTokenOrFail() {
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("conexao_trade_token")
+        : null;
+    return token || "";
+  }
+
   async function carregarUsuarios() {
     try {
       setLoading(true);
       setErrorMsg("");
-      const res = await fetch(`${apiBaseUrl}/api/usuarios`);
+      const token = getTokenOrFail();
+      if (!token) {
+        throw new Error("Token ausente. Faca login novamente.");
+      }
+
+      const res = await fetch(`${apiBaseUrl}/api/usuarios`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.message || "Erro ao carregar usuarios.");
@@ -89,6 +106,24 @@ export default function ConfigUsuariosPage() {
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
+    if (name === "role" && value === "PLATFORM_ADMIN") {
+      setForm((prev) => ({
+        ...prev,
+        role: value,
+        accessChannel: "interno", // super admin usa canal interno
+        supplierId: "",
+      }));
+      return;
+    }
+    if (name === "accessChannel" && value !== "industria") {
+      setForm((prev) => ({
+        ...prev,
+        accessChannel: value,
+        supplierId: "",
+      }));
+      return;
+    }
+
     setForm((prev) => ({
       ...prev,
       [name]: value,
@@ -102,7 +137,7 @@ export default function ConfigUsuariosPage() {
       login: "",
       email: "",
       password: "",
-      role: "user",
+      role: "USER",
       status: "ativo",
       accessChannel: "industria",
       supplierId: "",
@@ -118,7 +153,7 @@ export default function ConfigUsuariosPage() {
       login: usuario.login || "",
       email: usuario.email || "",
       password: "",
-      role: usuario.role || "user",
+      role: usuario.role || "USER",
       status: usuario.status || "ativo",
       accessChannel: usuario.accessChannel || "industria",
       supplierId: usuario.supplierId ?? "",
@@ -149,6 +184,10 @@ export default function ConfigUsuariosPage() {
 
     try {
       setSaving(true);
+      const token = getTokenOrFail();
+      if (!token) {
+        throw new Error("Token ausente. Faca login novamente.");
+      }
 
       const payload: any = {
         name: form.name,
@@ -157,7 +196,7 @@ export default function ConfigUsuariosPage() {
         role: form.role,
         status: form.status,
         accessChannel: form.accessChannel,
-        supplierId: supplierIdParsed,
+        supplierId: form.accessChannel === "industria" ? supplierIdParsed : null,
       };
 
       if (form.password) {
@@ -172,7 +211,10 @@ export default function ConfigUsuariosPage() {
 
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(payload),
       });
 
@@ -208,8 +250,16 @@ export default function ConfigUsuariosPage() {
     try {
       setErrorMsg("");
       setSuccessMsg("");
+      const token = getTokenOrFail();
+      if (!token) {
+        throw new Error("Token ausente. Faca login novamente.");
+      }
+
       const res = await fetch(`${apiBaseUrl}/api/usuarios/${id}`, {
         method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
       const data = await res.json();
       if (!res.ok) {
@@ -232,9 +282,17 @@ export default function ConfigUsuariosPage() {
     try {
       setErrorMsg("");
       setSuccessMsg("");
+      const token = getTokenOrFail();
+      if (!token) {
+        throw new Error("Token ausente. Faca login novamente.");
+      }
+
       const res = await fetch(`${apiBaseUrl}/api/usuarios/${usuario.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ status: novoStatus }),
       });
       const data = await res.json();
@@ -371,8 +429,9 @@ export default function ConfigUsuariosPage() {
                 onChange={handleChange}
                 style={{ ...inputStyle, paddingRight: 28 }}
               >
-                <option value="user">Usuario</option>
-                <option value="admin">Admin</option>
+                <option value="USER">Usuario</option>
+                <option value="TENANT_ADMIN">Tenant Admin</option>
+                <option value="PLATFORM_ADMIN">Super Admin (plataforma)</option>
               </select>
             </Field>
 
@@ -381,10 +440,16 @@ export default function ConfigUsuariosPage() {
                 name="accessChannel"
                 value={form.accessChannel}
                 onChange={handleChange}
-                style={{ ...inputStyle, paddingRight: 28 }}
+                disabled={form.role === "PLATFORM_ADMIN"}
+                style={{
+                  ...inputStyle,
+                  paddingRight: 28,
+                  background: form.role === "PLATFORM_ADMIN" ? "#f3f4f6" : "#fff",
+                }}
               >
                 <option value="industria">Industria</option>
                 <option value="varejo">Varejo</option>
+                <option value="interno">Super Admin</option>
               </select>
             </Field>
 
