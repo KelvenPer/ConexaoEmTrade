@@ -44,6 +44,7 @@ model TBLTENANT {
   users     TBLUSER[]
   suppliers TBLFORN[]
   retailers TBLRETAIL[]
+  partnerships TBLPARTNERSHIP[]
 }
 
 // =========================
@@ -69,6 +70,7 @@ model TBLFORN {
   retailPlanos  TBLRETAILMEDIA_PLANO[]
   vendasResumos TBLVENDASRESUMO[]
   users         TBLUSER[]
+  partnerships  TBLPARTNERSHIP[]
 }
 
 // =========================
@@ -94,6 +96,27 @@ model TBLRETAIL {
   retailPlanos  TBLRETAILMEDIA_PLANO[]
   vendasResumos TBLVENDASRESUMO[]
   users         TBLUSER[]
+  partnerships  TBLPARTNERSHIP[]
+}
+
+// =========================
+// Parceria Industria x Varejo
+// =========================
+
+model TBLPARTNERSHIP {
+  id         Int      @id @default(autoincrement())
+  tenantId   Int
+  supplierId Int
+  retailId   Int
+  status     String   @default("ativo") // ativo, inativo, encerrado
+  validFrom  DateTime? // opcional: data de inicio do contrato
+  validTo    DateTime? // opcional: data de fim do contrato
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant   TBLTENANT @relation(fields: [tenantId], references: [id])
+  supplier TBLFORN   @relation(fields: [supplierId], references: [id])
+  retail   TBLRETAIL @relation(fields: [retailId], references: [id])
 }
 
 // =========================

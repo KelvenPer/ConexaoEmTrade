@@ -74,6 +74,17 @@ async function main() {
     },
   });
 
+  // 4.1) Parceria ativa entre NestlǸ e Varejo X (contrato para liberar visualizacao)
+  await prisma.tBLPARTNERSHIP.create({
+    data: {
+      tenantId: varejoTenant.id, // armazenamos a parceria no tenant do varejo
+      supplierId: nestleSupplier.id,
+      retailId: varejoX.id,
+      status: "ativo",
+      validFrom: new Date(),
+    },
+  });
+
   // 5) Usuário plataforma (PLATFORM_ADMIN)
   const kelvenPasswordHash = await bcrypt.hash("senha-forte-kelven", 10);
   await upsertUserByEmailOrLogin({

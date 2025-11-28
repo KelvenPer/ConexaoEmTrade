@@ -2,17 +2,22 @@
 const express = require("express");
 const { UserRole } = require("@prisma/client");
 const prisma = require("../prisma");
-const { getUserFromRequest } = require("../auth/token");
+const { resolveScope, applyScopeToWhere } = require("../auth/multiTenantFilter");
+const { requireAuthUser } = require("../auth/requireAuth");
 
 const router = express.Router();
 
-function requireAuth(req, res) {
-  const user = getUserFromRequest(req);
-  if (!user) {
-    res.status(401).json({ message: "Token ausente ou invalido." });
-    return null;
-  }
-  return user;
+async function requireAuth(req, res) {
+  return requireAuthUser(req, res);
+}
+
+async function scopedWhere(user, baseWhere = {}) {
+  const scope = await resolveScope(user);
+  return applyScopeToWhere(baseWhere, scope, {
+    tenantField: "tenantId",
+    supplierField: "id",
+    retailField: null,
+  });
 }
 
 function assertCanManage(currentUser, targetTenantId) {
@@ -33,13 +38,13 @@ function assertCanManage(currentUser, targetTenantId) {
 // GET /api/fornecedores/ativos -> listar apenas fornecedores ativos
 router.get("/ativos", async (req, res) => {
   try {
-    const user = requireAuth(req, res);
+    const user = await requireAuth(req, res);
     if (!user) return;
 
-    const where =
-      user.role === UserRole.PLATFORM_ADMIN
-        ? { status: "ativo" }
-        : { status: "ativo", tenantId: user.tenantId };
+    const where = await scopedWhere(user, { status: "ativo" });
+    if (where.id === -1) {
+      return res.status(403).json({ message: "Acesso negado." });
+    }
 
     const fornecedores = await prisma.TBLFORN.findMany({
       where,
@@ -55,13 +60,13 @@ router.get("/ativos", async (req, res) => {
 // GET /api/fornecedores -> listar todos
 router.get("/", async (req, res) => {
   try {
-    const user = requireAuth(req, res);
+    const user = await requireAuth(req, res);
     if (!user) return;
 
-    const where =
-      user.role === UserRole.PLATFORM_ADMIN
-        ? {}
-        : { tenantId: user.tenantId };
+    const where = await scopedWhere(user, {});
+    if (where.id === -1) {
+      return res.status(403).json({ message: "Acesso negado." });
+    }
 
     const fornecedores = await prisma.TBLFORN.findMany({
       where,
@@ -77,17 +82,17 @@ router.get("/", async (req, res) => {
 // GET /api/fornecedores/:id -> buscar 1 fornecedor
 router.get("/:id", async (req, res) => {
   try {
-    const user = requireAuth(req, res);
+    const user = await requireAuth(req, res);
     if (!user) return;
 
     const id = Number(req.params.id);
 
-    const fornecedor = await prisma.TBLFORN.findFirst({
-      where:
-        user.role === UserRole.PLATFORM_ADMIN
-          ? { id }
-          : { id, tenantId: user.tenantId },
-    });
+    const where = await scopedWhere(user, { id });
+    if (where.id === -1) {
+      return res.status(403).json({ message: "Acesso negado." });
+    }
+
+    const fornecedor = await prisma.TBLFORN.findFirst({ where });
 
     if (!fornecedor) {
       return res.status(404).json({ message: "Fornecedor nao encontrado." });
@@ -103,7 +108,7 @@ router.get("/:id", async (req, res) => {
 // POST /api/fornecedores -> criar fornecedor
 router.post("/", async (req, res) => {
   try {
-    const currentUser = requireAuth(req, res);
+    const currentUser = await requireAuth(req, res);
     if (!currentUser) return;
 
     const { name, document, segment, channel, status, tenantId } = req.body;
@@ -147,7 +152,7 @@ router.post("/", async (req, res) => {
 // PUT /api/fornecedores/:id -> atualizar fornecedor
 router.put("/:id", async (req, res) => {
   try {
-    const currentUser = requireAuth(req, res);
+    const currentUser = await requireAuth(req, res);
     if (!currentUser) return;
 
     const id = Number(req.params.id);
@@ -193,7 +198,7 @@ router.put("/:id", async (req, res) => {
 // DELETE /api/fornecedores/:id -> deletar fornecedor
 router.delete("/:id", async (req, res) => {
   try {
-    const currentUser = requireAuth(req, res);
+    const currentUser = await requireAuth(req, res);
     if (!currentUser) return;
 
     const id = Number(req.params.id);
@@ -212,11 +217,13 @@ router.delete("/:id", async (req, res) => {
       return res.status(403).json({ message: err.message });
     }
 
-    await prisma.TBLFORN.delete({
-      where: { id },
-    });
+    // Remove contratos/parcerias antes de excluir o fornecedor para evitar violacao de FK
+    await prisma.$transaction([
+      prisma.TBLPARTNERSHIP.deleteMany({ where: { supplierId: id } }),
+      prisma.TBLFORN.delete({ where: { id } }),
+    ]);
 
-    res.json({ message: "Fornecedor deletado com sucesso." });
+    res.json({ message: "Fornecedor e contratos vinculados deletados com sucesso." });
   } catch (error) {
     console.error("Erro ao deletar fornecedor:", error);
     res.status(500).json({ message: "Erro ao deletar fornecedor." });

@@ -2,17 +2,12 @@
 const express = require("express");
 const { UserRole } = require("@prisma/client");
 const prisma = require("../prisma");
-const { getUserFromRequest } = require("../auth/token");
+const { requireAuthUser } = require("../auth/requireAuth");
 
 const router = express.Router();
 
-function requireAuth(req, res) {
-  const user = getUserFromRequest(req);
-  if (!user) {
-    res.status(401).json({ message: "Token ausente ou invalido." });
-    return null;
-  }
-  return user;
+async function requireAuth(req, res) {
+  return requireAuthUser(req, res);
 }
 
 function assertCanManage(currentUser) {
@@ -30,7 +25,7 @@ function assertCanManage(currentUser) {
  */
 router.get("/", async (req, res) => {
   try {
-    const user = requireAuth(req, res);
+    const user = await requireAuth(req, res);
     if (!user) return;
 
     const ativos = await prisma.TBLATV.findMany({
@@ -49,7 +44,7 @@ router.get("/", async (req, res) => {
  */
 router.get("/ativos", async (req, res) => {
   try {
-    const user = requireAuth(req, res);
+    const user = await requireAuth(req, res);
     if (!user) return;
 
     const ativos = await prisma.TBLATV.findMany({
@@ -69,7 +64,7 @@ router.get("/ativos", async (req, res) => {
  */
 router.post("/", async (req, res) => {
   try {
-    const currentUser = requireAuth(req, res);
+    const currentUser = await requireAuth(req, res);
     if (!currentUser) return;
     try {
       assertCanManage(currentUser);
@@ -125,7 +120,7 @@ router.post("/", async (req, res) => {
  */
 router.put("/:id", async (req, res) => {
   try {
-    const currentUser = requireAuth(req, res);
+    const currentUser = await requireAuth(req, res);
     if (!currentUser) return;
     try {
       assertCanManage(currentUser);
@@ -187,7 +182,7 @@ router.put("/:id", async (req, res) => {
  */
 router.delete("/:id", async (req, res) => {
   try {
-    const currentUser = requireAuth(req, res);
+    const currentUser = await requireAuth(req, res);
     if (!currentUser) return;
     try {
       assertCanManage(currentUser);

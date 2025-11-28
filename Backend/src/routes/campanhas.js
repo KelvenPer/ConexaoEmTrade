@@ -1,8 +1,57 @@
 // backend/src/routes/campanhas.js
 const express = require("express");
+const { UserRole, AccessChannel } = require("@prisma/client");
 const prisma = require("../prisma");
+const { requireAuthUser } = require("../auth/requireAuth");
+const { resolveScope, applyScopeToWhere, normalizeChannel } = require("../auth/multiTenantFilter");
 
 const router = express.Router();
+
+async function getScopedWhere(req, res, baseWhere, opts = { allowNullRetail: false }) {
+  const user = await requireAuthUser(req, res);
+  if (!user) return { user: null, where: { id: -1 }, scope: null };
+  const scope = await resolveScope(user);
+  const where = applyScopeToWhere(baseWhere, scope, opts);
+  if (where.id === -1) {
+    res.status(403).json({ message: "Acesso negado para este recurso." });
+  }
+  return { user, scope, where };
+}
+
+function assertCanWrite(user) {
+  const channel = normalizeChannel(user.accessChannel);
+  if (
+    user.role === UserRole.PLATFORM_ADMIN ||
+    user.role === UserRole.TENANT_ADMIN
+  ) {
+    return;
+  }
+  if (channel === AccessChannel.industria && user.supplierId) return;
+  if (channel === AccessChannel.varejo && user.retailId) return;
+  throw new Error("Permissao negada para alterar campanhas.");
+}
+
+async function ensureCampaignAccess(req, res, id) {
+  const campaign = await prisma.TBLCAMPANHA.findUnique({
+    where: { id },
+    include: { itens: false },
+  });
+  if (!campaign) {
+    res.status(404).json({ message: "Campanha nao encontrada." });
+    return { user: null, scope: null, campaign: null };
+  }
+
+  const { user, scope } = await getScopedWhere(req, res, {
+    supplierId: campaign.supplierId,
+    retailId: campaign.retailId,
+  });
+
+  if (!user || !scope || user === null || scope === null) {
+    return { user: null, scope: null, campaign: null };
+  }
+
+  return { user, scope, campaign };
+}
 
 /**
  * GET /api/campanhas
@@ -15,25 +64,28 @@ router.get("/", async (req, res) => {
   try {
     const { supplierId, jbpId, status } = req.query;
 
-    const where = {};
+    const baseWhere = {};
 
     if (supplierId) {
       const sid = Number(supplierId);
       if (!Number.isNaN(sid)) {
-        where.supplierId = sid;
+        baseWhere.supplierId = sid;
       }
     }
 
     if (jbpId) {
       const jid = Number(jbpId);
       if (!Number.isNaN(jid)) {
-        where.jbpId = jid;
+        baseWhere.jbpId = jid;
       }
     }
 
     if (status) {
-      where.status = status;
+      baseWhere.status = status;
     }
+
+    const { user, where } = await getScopedWhere(req, res, baseWhere);
+    if (!user || where.id === -1) return;
 
     const campanhas = await prisma.TBLCAMPANHA.findMany({
       where,
@@ -59,20 +111,19 @@ router.get("/", async (req, res) => {
 });
 
 // GET /api/campanhas/calendar
-// Retorna campanhas com peças aprovadas dentro de um período
+// Retorna campanhas com pecas aprovadas dentro de um periodo
 router.get("/calendar", async (req, res) => {
   try {
     const { start, end, supplierId } = req.query;
 
-    // Período padrão: do 1º dia do mês atual até +60 dias
     const now = new Date();
     const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const defaultEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0); // fim do mês +2
+    const defaultEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0);
 
     const startDate = start ? new Date(start) : defaultStart;
     const endDate = end ? new Date(end) : defaultEnd;
 
-    const where = {
+    const baseWhere = {
       ...(supplierId ? { supplierId: Number(supplierId) || undefined } : {}),
       itens: {
         some: {
@@ -84,6 +135,9 @@ router.get("/calendar", async (req, res) => {
         },
       },
     };
+
+    const { user, where } = await getScopedWhere(req, res, baseWhere);
+    if (!user || where.id === -1) return;
 
     const campanhas = await prisma.TBLCAMPANHA.findMany({
       where,
@@ -138,10 +192,10 @@ router.get("/calendar", async (req, res) => {
       campanhas: result,
     });
   } catch (error) {
-    console.error("Erro ao carregar calendário de campanhas:", error);
+    console.error("Erro ao carregar calendario de campanhas:", error);
     return res
       .status(500)
-      .json({ message: "Erro ao carregar calendário de campanhas." });
+      .json({ message: "Erro ao carregar calendario de campanhas." });
   }
 });
 
@@ -153,11 +207,14 @@ router.get("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
-      return res.status(400).json({ message: "ID inválido." });
+      return res.status(400).json({ message: "ID invalido." });
     }
 
+    const { user, scope, campaign } = await ensureCampaignAccess(req, res, id);
+    if (!user || !campaign) return;
+
     const campanha = await prisma.TBLCAMPANHA.findUnique({
-      where: { id },
+      where: { id: campaign.id },
       include: {
         supplier: true,
         jbp: true,
@@ -171,10 +228,6 @@ router.get("/:id", async (req, res) => {
       },
     });
 
-    if (!campanha) {
-      return res.status(404).json({ message: "Campanha não encontrada." });
-    }
-
     return res.json(campanha);
   } catch (error) {
     console.error("Erro ao buscar campanha:", error);
@@ -184,12 +237,13 @@ router.get("/:id", async (req, res) => {
 
 /**
  * POST /api/campanhas
- * Cria uma campanha (cabeçalho)
+ * Cria uma campanha (cabecalho)
  */
 router.post("/", async (req, res) => {
   try {
     const {
       supplierId,
+      retailId,
       jbpId,
       name,
       objective,
@@ -210,16 +264,25 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ message: "Fornecedor invalido." });
     }
 
-    const fornecedor = await prisma.TBLFORN.findUnique({
-      where: { id: sid },
-      select: { id: true },
-    });
-    if (!fornecedor) {
-      return res.status(400).json({ message: "Fornecedor nao encontrado." });
+    const rid =
+      retailId !== undefined && retailId !== null && retailId !== ""
+        ? Number(retailId)
+        : null;
+    if (rid !== null && Number.isNaN(rid)) {
+      return res.status(400).json({ message: "Varejo invalido." });
+    }
+
+    const { user } = await getScopedWhere(req, res, { supplierId: sid, retailId: rid });
+    if (!user) return;
+    try {
+      assertCanWrite(user);
+    } catch (err) {
+      return res.status(403).json({ message: err.message });
     }
 
     const dataToCreate = {
       supplierId: sid,
+      retailId: rid,
       name,
       objective: objective || null,
       channel: channel || null,
@@ -271,22 +334,27 @@ router.post("/", async (req, res) => {
 
 /**
  * PUT /api/campanhas/:id
- * Atualiza cabeçalho da campanha
+ * Atualiza cabecalho da campanha
  */
 router.put("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
-      return res.status(400).json({ message: "ID inválido." });
+      return res.status(400).json({ message: "ID invalido." });
     }
 
-    const existente = await prisma.TBLCAMPANHA.findUnique({ where: { id } });
-    if (!existente) {
-      return res.status(404).json({ message: "Campanha não encontrada." });
+    const { user, campaign } = await ensureCampaignAccess(req, res, id);
+    if (!user || !campaign) return;
+
+    try {
+      assertCanWrite(user);
+    } catch (err) {
+      return res.status(403).json({ message: err.message });
     }
 
     const {
       supplierId,
+      retailId,
       jbpId,
       name,
       objective,
@@ -297,24 +365,37 @@ router.put("/:id", async (req, res) => {
     } = req.body;
 
     const dataToUpdate = {};
-    let supplierIdToUse = existente.supplierId;
+    let supplierIdToUse = campaign.supplierId;
 
     if (supplierId !== undefined) {
       const sid = Number(supplierId);
       if (Number.isNaN(sid)) {
         return res.status(400).json({ message: "Fornecedor invalido." });
       }
-
-      const fornecedor = await prisma.TBLFORN.findUnique({
-        where: { id: sid },
-        select: { id: true },
-      });
-      if (!fornecedor) {
-        return res.status(400).json({ message: "Fornecedor nao encontrado." });
-      }
-
       dataToUpdate.supplierId = sid;
       supplierIdToUse = sid;
+      const { where } = await getScopedWhere(req, res, {
+        supplierId: sid,
+        retailId: campaign.retailId,
+      });
+      if (where.id === -1) return;
+    }
+
+    if (retailId !== undefined) {
+      if (!retailId) {
+        dataToUpdate.retailId = null;
+      } else {
+        const rid = Number(retailId);
+        if (Number.isNaN(rid)) {
+          return res.status(400).json({ message: "Varejo invalido." });
+        }
+        dataToUpdate.retailId = rid;
+        const { where } = await getScopedWhere(req, res, {
+          supplierId: supplierIdToUse,
+          retailId: rid,
+        });
+        if (where.id === -1) return;
+      }
     }
 
     if (jbpId !== undefined) {
@@ -380,18 +461,21 @@ router.put("/:id", async (req, res) => {
 
 /**
  * DELETE /api/campanhas/:id
- * (Opcional) Remove campanha e seus itens
+ * Remove campanha e seus itens
  */
 router.delete("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
-      return res.status(400).json({ message: "ID inválido." });
+      return res.status(400).json({ message: "ID invalido." });
     }
 
-    const existente = await prisma.TBLCAMPANHA.findUnique({ where: { id } });
-    if (!existente) {
-      return res.status(404).json({ message: "Campanha não encontrada." });
+    const { user, campaign } = await ensureCampaignAccess(req, res, id);
+    if (!user || !campaign) return;
+    try {
+      assertCanWrite(user);
+    } catch (err) {
+      return res.status(403).json({ message: err.message });
     }
 
     await prisma.TBLCAMPANHAITEM.deleteMany({ where: { campanhaId: id } });
@@ -412,7 +496,15 @@ router.post("/:id/itens", async (req, res) => {
   try {
     const campanhaId = Number(req.params.id);
     if (Number.isNaN(campanhaId)) {
-      return res.status(400).json({ message: "Campanha inválida." });
+      return res.status(400).json({ message: "Campanha invalida." });
+    }
+
+    const { user, campaign } = await ensureCampaignAccess(req, res, campanhaId);
+    if (!user || !campaign) return;
+    try {
+      assertCanWrite(user);
+    } catch (err) {
+      return res.status(403).json({ message: err.message });
     }
 
     const {
@@ -425,18 +517,17 @@ router.post("/:id/itens", async (req, res) => {
       goLiveDate,
       urlDestino,
       notes,
-      // NOVOS
       creativeUrl,
       approvalStatus,
     } = req.body;
 
     if (!assetId) {
-      return res.status(400).json({ message: "Ativo é obrigatório." });
+      return res.status(400).json({ message: "Ativo e obrigatorio." });
     }
 
     const assetIdNumber = Number(assetId);
     if (Number.isNaN(assetIdNumber)) {
-      return res.status(400).json({ message: "Ativo inválido." });
+      return res.status(400).json({ message: "Ativo invalido." });
     }
 
     const dataToCreate = {
@@ -489,7 +580,7 @@ router.put("/itens/:itemId", async (req, res) => {
   try {
     const itemId = Number(req.params.itemId);
     if (Number.isNaN(itemId)) {
-      return res.status(400).json({ message: "Item inválido." });
+      return res.status(400).json({ message: "Item invalido." });
     }
 
     const existente = await prisma.TBLCAMPANHAITEM.findUnique({
@@ -497,7 +588,16 @@ router.put("/itens/:itemId", async (req, res) => {
     });
 
     if (!existente) {
-      return res.status(404).json({ message: "Item de campanha não encontrado." });
+      return res.status(404).json({ message: "Item de campanha nao encontrado." });
+    }
+
+    const campanhaId = existente.campanhaId;
+    const { user, campaign } = await ensureCampaignAccess(req, res, campanhaId);
+    if (!user || !campaign) return;
+    try {
+      assertCanWrite(user);
+    } catch (err) {
+      return res.status(403).json({ message: err.message });
     }
 
     const {
@@ -510,38 +610,38 @@ router.put("/itens/:itemId", async (req, res) => {
       goLiveDate,
       urlDestino,
       notes,
-      // NOVOS
       creativeUrl,
       approvalStatus,
     } = req.body;
 
     const dataToUpdate = {};
 
+    if (assetId !== undefined) {
+      const aid = Number(assetId);
+      if (Number.isNaN(aid)) {
+        return res.status(400).json({ message: "Ativo invalido." });
+      }
+      dataToUpdate.assetId = aid;
+    }
+
     if (jbpItemId !== undefined) {
       if (!jbpItemId) {
         dataToUpdate.jbpItemId = null;
       } else {
         const jid = Number(jbpItemId);
-        if (!Number.isNaN(jid)) dataToUpdate.jbpItemId = jid;
+        if (Number.isNaN(jid)) {
+          return res.status(400).json({ message: "JBP item invalido." });
+        }
+        dataToUpdate.jbpItemId = jid;
       }
     }
 
-    if (assetId !== undefined) {
-      const aid = Number(assetId);
-      if (!Number.isNaN(aid)) dataToUpdate.assetId = aid;
-    }
-
     if (title !== undefined) dataToUpdate.title = title || null;
-    if (contentType !== undefined)
-      dataToUpdate.contentType = contentType || null;
+    if (contentType !== undefined) dataToUpdate.contentType = contentType || null;
     if (urlDestino !== undefined) dataToUpdate.urlDestino = urlDestino || null;
     if (notes !== undefined) dataToUpdate.notes = notes || null;
-    if (creativeUrl !== undefined) {
-      dataToUpdate.creativeUrl = creativeUrl || null;
-    }
-    if (approvalStatus !== undefined) {
-      dataToUpdate.approvalStatus = approvalStatus;
-    }
+    if (creativeUrl !== undefined) dataToUpdate.creativeUrl = creativeUrl || null;
+    if (approvalStatus !== undefined) dataToUpdate.approvalStatus = approvalStatus;
 
     if (artDeadline !== undefined) {
       if (!artDeadline) {
@@ -570,48 +670,15 @@ router.put("/itens/:itemId", async (req, res) => {
       }
     }
 
-    const atualizado = await prisma.TBLCAMPANHAITEM.update({
+    const itemAtualizado = await prisma.TBLCAMPANHAITEM.update({
       where: { id: itemId },
       data: dataToUpdate,
     });
 
-    return res.json(atualizado);
+    return res.json(itemAtualizado);
   } catch (error) {
     console.error("Erro ao atualizar item de campanha:", error);
-    return res
-      .status(500)
-      .json({ message: "Erro ao atualizar item de campanha." });
-  }
-});
-
-/**
- * DELETE /api/campanhas/itens/:itemId
- */
-router.delete("/itens/:itemId", async (req, res) => {
-  try {
-    const itemId = Number(req.params.itemId);
-    if (Number.isNaN(itemId)) {
-      return res.status(400).json({ message: "Item inválido." });
-    }
-
-    const existente = await prisma.TBLCAMPANHAITEM.findUnique({
-      where: { id: itemId },
-    });
-
-    if (!existente) {
-      return res
-        .status(404)
-        .json({ message: "Item de campanha não encontrado." });
-    }
-
-    await prisma.TBLCAMPANHAITEM.delete({ where: { id: itemId } });
-
-    return res.json({ message: "Item de campanha removido com sucesso." });
-  } catch (error) {
-    console.error("Erro ao excluir item de campanha:", error);
-    return res
-      .status(500)
-      .json({ message: "Erro ao excluir item de campanha." });
+    return res.status(500).json({ message: "Erro ao atualizar item de campanha." });
   }
 });
 

@@ -4,18 +4,23 @@ const bcrypt = require("bcryptjs");
 const { AccessChannel, UserRole } = require("@prisma/client");
 const prisma = require("../prisma");
 const { resolveTenantContext } = require("../auth/tenantContext");
-const { normalizeChannel, buildMultiTenantWhere } = require("../auth/multiTenantFilter");
-const { getUserFromRequest } = require("../auth/token");
+const { normalizeChannel, resolveScope, applyScopeToWhere } = require("../auth/multiTenantFilter");
+const { requireAuthUser } = require("../auth/requireAuth");
 
 const router = express.Router();
 
+async function scopedWhere(user, baseWhere = {}) {
+  const scope = await resolveScope(user);
+  return applyScopeToWhere(baseWhere, scope, {
+    tenantField: "tenantId",
+    supplierField: "supplierId",
+    retailField: "retailId",
+    allowNullRetail: true,
+  });
+}
+
 function requireAuth(req, res) {
-  const user = getUserFromRequest(req);
-  if (!user) {
-    res.status(401).json({ message: "Token ausente ou invalido." });
-    return null;
-  }
-  return user;
+  return requireAuthUser(req, res);
 }
 
 function assertCanManageUsers(currentUser) {
@@ -33,10 +38,10 @@ function assertCanManageUsers(currentUser) {
  */
 router.get("/", async (_req, res) => {
   try {
-    const user = requireAuth(_req, res);
+    const user = await requireAuth(_req, res);
     if (!user) return;
 
-    const where = buildMultiTenantWhere(user, {});
+    const where = await scopedWhere(user, {});
 
     const usuarios = await prisma.TBLUSER.findMany({
       where,
@@ -70,7 +75,7 @@ router.get("/", async (_req, res) => {
  */
 router.get("/me", async (req, res) => {
   try {
-    const decoded = requireAuth(req, res);
+    const decoded = await requireAuth(req, res);
     if (!decoded) return;
 
     const userId = decoded.sub || decoded.id;
@@ -109,7 +114,7 @@ router.get("/me", async (req, res) => {
  */
 router.put("/me/foto", async (req, res) => {
   try {
-    const decoded = requireAuth(req, res);
+    const decoded = await requireAuth(req, res);
     if (!decoded) return;
 
     const userId = decoded.sub || decoded.id;
@@ -156,7 +161,7 @@ router.put("/me/foto", async (req, res) => {
  */
 router.put("/me/senha", async (req, res) => {
   try {
-    const decoded = requireAuth(req, res);
+    const decoded = await requireAuth(req, res);
     if (!decoded) return;
 
     const userId = decoded.sub || decoded.id;
@@ -206,7 +211,7 @@ router.put("/me/senha", async (req, res) => {
  */
 router.get("/:id", async (req, res) => {
   try {
-    const currentUser = requireAuth(req, res);
+    const currentUser = await requireAuth(req, res);
     if (!currentUser) return;
 
     const id = Number(req.params.id);
@@ -215,7 +220,7 @@ router.get("/:id", async (req, res) => {
     }
 
     const usuario = await prisma.TBLUSER.findFirst({
-      where: buildMultiTenantWhere(currentUser, { id }),
+      where: await scopedWhere(currentUser, { id }),
       select: {
         id: true,
         name: true,
@@ -249,7 +254,7 @@ router.get("/:id", async (req, res) => {
  */
 router.post("/", async (req, res) => {
   try {
-    const currentUser = requireAuth(req, res);
+    const currentUser = await requireAuth(req, res);
     if (!currentUser) return;
     assertCanManageUsers(currentUser);
 
@@ -384,7 +389,7 @@ router.post("/", async (req, res) => {
  */
 router.put("/:id", async (req, res) => {
   try {
-    const currentUser = requireAuth(req, res);
+    const currentUser = await requireAuth(req, res);
     if (!currentUser) return;
     assertCanManageUsers(currentUser);
 
@@ -424,7 +429,7 @@ router.put("/:id", async (req, res) => {
     }
 
     const usuarioAtual = await prisma.TBLUSER.findFirst({
-      where: buildMultiTenantWhere(currentUser, { id }),
+      where: await scopedWhere(currentUser, { id }),
     });
 
     if (!usuarioAtual) {
@@ -556,7 +561,7 @@ router.put("/:id", async (req, res) => {
  */
 router.delete("/:id", async (req, res) => {
   try {
-    const currentUser = requireAuth(req, res);
+    const currentUser = await requireAuth(req, res);
     if (!currentUser) return;
     assertCanManageUsers(currentUser);
 
@@ -566,7 +571,7 @@ router.delete("/:id", async (req, res) => {
     }
 
     const usuario = await prisma.TBLUSER.findFirst({
-      where: buildMultiTenantWhere(currentUser, { id }),
+      where: await scopedWhere(currentUser, { id }),
     });
 
     if (!usuario) {

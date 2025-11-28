@@ -30,6 +30,10 @@ export default function PainelLayout({ children }: LayoutProps) {
   const [userEmail, setUserEmail] = useState("");
   const [userLogin, setUserLogin] = useState("");
   const [userPhoto, setUserPhoto] = useState<string | null>(null);
+  const [accessChannel, setAccessChannel] = useState("industria");
+  const [tenantId, setTenantId] = useState<number | null>(null);
+  const [supplierId, setSupplierId] = useState<number | null>(null);
+  const [retailId, setRetailId] = useState<number | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -46,6 +50,11 @@ export default function PainelLayout({ children }: LayoutProps) {
     () => (typeof window !== "undefined" ? localStorage.getItem("conexao_trade_token") : null),
     []
   );
+  const isPlatformAdmin = userRole === "PLATFORM_ADMIN";
+  const isTenantAdmin = userRole === "TENANT_ADMIN";
+  const canManageConfig = isPlatformAdmin || isTenantAdmin;
+  const channelLabel =
+    accessChannel === "varejo" ? "Varejo" : accessChannel === "interno" ? "Interno" : "Industria";
 
   const persistUser = useCallback((data: Record<string, unknown>) => {
     if (typeof window === "undefined") return;
@@ -73,6 +82,10 @@ export default function PainelLayout({ children }: LayoutProps) {
     if (data?.email) setUserEmail(String(data.email));
     if (data?.login) setUserLogin(String(data.login));
     if (data?.role) setUserRole(String(data.role));
+    if (data?.accessChannel) setAccessChannel(String(data.accessChannel));
+    if (data?.tenantId !== undefined) setTenantId(data.tenantId ? Number(data.tenantId) : null);
+    if (data?.supplierId !== undefined) setSupplierId(data.supplierId ? Number(data.supplierId) : null);
+    if (data?.retailId !== undefined) setRetailId(data.retailId ? Number(data.retailId) : null);
     if (data?.photoUrl) {
       setUserPhoto(String(data.photoUrl));
       localStorage.setItem("conexao_trade_user_photo", String(data.photoUrl));
@@ -115,8 +128,12 @@ export default function PainelLayout({ children }: LayoutProps) {
         const parsed = JSON.parse(storedUser);
         if (parsed?.name) setUserName(parsed.name as string);
         if (parsed?.role) setUserRole(String(parsed.role));
+        if (parsed?.accessChannel) setAccessChannel(String(parsed.accessChannel));
         if (parsed?.email) setUserEmail(String(parsed.email));
         if (parsed?.login) setUserLogin(String(parsed.login));
+        if (parsed?.tenantId !== undefined) setTenantId(parsed.tenantId ? Number(parsed.tenantId) : null);
+        if (parsed?.supplierId !== undefined) setSupplierId(parsed.supplierId ? Number(parsed.supplierId) : null);
+        if (parsed?.retailId !== undefined) setRetailId(parsed.retailId ? Number(parsed.retailId) : null);
         if (parsed?.photoUrl) setUserPhoto(String(parsed.photoUrl));
       } catch {
         // ignore parse issues
@@ -182,6 +199,9 @@ export default function PainelLayout({ children }: LayoutProps) {
             <span className="app-shell__sidebar-header-title-sub">
               Painel de Trade Marketing &amp; Dados
             </span>
+            <span className="app-shell__sidebar-header-title-sub">
+              {channelLabel} • {userRole}
+            </span>
           </div>
         </div>
 
@@ -230,34 +250,40 @@ export default function PainelLayout({ children }: LayoutProps) {
             </NavItem>
           </NavGroup>
 
-          <NavGroup title="Configuracoes">
-            <NavItem
-              href="/painel/config/usuarios"
-              pathname={pathname}
-              icon={<Users size={16} />}
-            >
-              Usuarios
-            </NavItem>
-            <NavItem
-              href="/painel/config/fornecedores"
-              pathname={pathname}
-              icon={<Factory size={16} />}
-            >
-              Fornecedores
-            </NavItem>
-            <NavItem
-              href="/painel/config/ativos"
-              pathname={pathname}
-              icon={<Settings2 size={16} />}
-            >
-              Ativos de midia
-            </NavItem>
-          </NavGroup>
+          {canManageConfig && (
+            <NavGroup title="Configuracoes">
+              <NavItem
+                href="/painel/config/usuarios"
+                pathname={pathname}
+                icon={<Users size={16} />}
+              >
+                Usuarios
+              </NavItem>
+              <NavItem
+                href="/painel/config/fornecedores"
+                pathname={pathname}
+                icon={<Factory size={16} />}
+              >
+                Fornecedores
+              </NavItem>
+              <NavItem
+                href="/painel/config/ativos"
+                pathname={pathname}
+                icon={<Settings2 size={16} />}
+              >
+                Ativos de midia
+              </NavItem>
+            </NavGroup>
+          )}
         </nav>
 
         <div className="app-shell__sidebar-footer">
           <div>Conexao em Trade - v0.1</div>
           <div>Ambiente de demonstracao</div>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>
+            {tenantId ? `Tenant #${tenantId}` : "Tenant nao atribuido"} •{" "}
+            {supplierId ? `Industria #${supplierId}` : retailId ? `Varejo #${retailId}` : channelLabel}
+          </div>
         </div>
       </aside>
 
