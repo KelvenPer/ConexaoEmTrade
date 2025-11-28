@@ -10,29 +10,70 @@ type UserProfile = {
 };
 
 export default function PerfilPage() {
-  const [user, setUser] = useState<UserProfile>({
-    name: "Usuario",
-    email: "",
-    login: "",
-    role: "user",
-  });
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const [user, setUser] = useState<UserProfile>(() => {
+    if (typeof window === "undefined") {
+      return {
+        name: "Usuario",
+        email: "",
+        login: "",
+        role: "user",
+      };
+    }
 
-  useEffect(() => {
     const storedUser = localStorage.getItem("conexao_trade_user");
     if (storedUser) {
       try {
         const parsed = JSON.parse(storedUser);
-        setUser({
+        return {
           name: parsed?.name || "Usuario",
           email: parsed?.email || "",
           login: parsed?.login || "",
           role: parsed?.role || "user",
-        });
+        };
       } catch {
-        // ignore parse errors
+        // segue com defaults abaixo
       }
     }
-  }, []);
+
+    return {
+      name: "Usuario",
+      email: "",
+      login: "",
+      role: "user",
+    };
+  });
+  const [statusMsg, setStatusMsg] = useState("");
+
+  useEffect(() => {
+    const token = localStorage.getItem("conexao_trade_token");
+    if (!token) return;
+
+    (async () => {
+      try {
+        const res = await fetch(`${apiBaseUrl}/api/usuarios/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          setStatusMsg(data?.message || "Nao foi possivel sincronizar seus dados agora.");
+          return;
+        }
+
+        setUser({
+          name: data?.name || "Usuario",
+          email: data?.email || "",
+          login: data?.login || "",
+          role: data?.role || "user",
+        });
+        localStorage.setItem("conexao_trade_user", JSON.stringify(data));
+        setStatusMsg("");
+      } catch {
+        setStatusMsg("Nao foi possivel sincronizar seus dados agora.");
+      }
+    })();
+  }, [apiBaseUrl]);
 
   return (
     <div>
@@ -49,6 +90,11 @@ export default function PerfilPage() {
       <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>
         Revise e atualize seus dados. A foto e a troca de senha tambem podem ser acessadas pelo menu do avatar.
       </p>
+      {statusMsg && (
+        <p style={{ fontSize: 12, color: "#b91c1c", marginBottom: 12 }}>
+          {statusMsg}
+        </p>
+      )}
 
       <div
         style={{

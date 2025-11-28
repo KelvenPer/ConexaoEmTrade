@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 export default function JbpJvcPage() {
   const apiBaseUrl =
@@ -59,11 +60,11 @@ export default function JbpJvcPage() {
   async function carregarBase() {
     try {
       // Fornecedores
-      const resFor = await fetch(`${apiBaseUrl}/api/fornecedores`);
+      const resFor = await apiFetch(`${apiBaseUrl}/api/fornecedores`);
       const dataFor = await resFor.json();
 
       // Ativos (apenas ativos)
-      const resAtv = await fetch(`${apiBaseUrl}/api/ativos/ativos`);
+      const resAtv = await apiFetch(`${apiBaseUrl}/api/ativos/ativos`);
       const dataAtv = await resAtv.json();
 
       if (!resFor.ok) throw new Error(dataFor.message || "Erro ao carregar fornecedores.");
@@ -81,7 +82,7 @@ export default function JbpJvcPage() {
     try {
       setLoadingList(true);
       setErrorMsg("");
-      const res = await fetch(`${apiBaseUrl}/api/jbp`);
+      const res = await apiFetch(`${apiBaseUrl}/api/jbp`);
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.message || "Erro ao listar JBPs.");
@@ -101,7 +102,7 @@ export default function JbpJvcPage() {
       setErrorMsg("");
       setSuccessMsg("");
 
-      const res = await fetch(`${apiBaseUrl}/api/jbp/${id}`);
+      const res = await apiFetch(`${apiBaseUrl}/api/jbp/${id}`);
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.message || "Erro ao carregar JBP.");
@@ -221,9 +222,8 @@ export default function JbpJvcPage() {
         method = "PUT";
       }
 
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
@@ -295,9 +295,8 @@ export default function JbpJvcPage() {
         method = "POST";
       }
 
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
@@ -356,7 +355,7 @@ export default function JbpJvcPage() {
       setErrorMsg("");
       setSuccessMsg("");
 
-      const res = await fetch(`${apiBaseUrl}/api/jbp/itens/${itemId}`, {
+      const res = await apiFetch(`${apiBaseUrl}/api/jbp/itens/${itemId}`, {
         method: "DELETE",
       });
       const data = await res.json();
@@ -381,11 +380,10 @@ export default function JbpJvcPage() {
     }
 
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${apiBaseUrl}/api/jbp/${selectedJbpId}/gerar-contrato`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
         }
       );
 

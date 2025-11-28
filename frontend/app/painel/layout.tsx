@@ -13,7 +13,7 @@ import {
   LineChart,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type LayoutProps = {
   children: ReactNode;
@@ -42,6 +42,71 @@ export default function PainelLayout({ children }: LayoutProps) {
   const [passwordError, setPasswordError] = useState("");
   const menuRef = useRef<HTMLDivElement | null>(null);
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const getToken = useCallback(
+    () => (typeof window !== "undefined" ? localStorage.getItem("conexao_trade_token") : null),
+    []
+  );
+
+  const persistUser = useCallback((data: Record<string, unknown>) => {
+    if (typeof window === "undefined") return;
+    try {
+      const current = localStorage.getItem("conexao_trade_user");
+      const parsed = current ? JSON.parse(current) : {};
+      localStorage.setItem("conexao_trade_user", JSON.stringify({ ...parsed, ...data }));
+    } catch {
+      localStorage.setItem("conexao_trade_user", JSON.stringify(data));
+    }
+  }, []);
+
+  const syncUserFromApi = useCallback(async () => {
+    const token = getToken();
+    if (!token) return null;
+
+    const res = await fetch(`${apiBaseUrl}/api/usuarios/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    if (data?.name) setUserName(String(data.name));
+    if (data?.email) setUserEmail(String(data.email));
+    if (data?.login) setUserLogin(String(data.login));
+    if (data?.role) setUserRole(String(data.role));
+    if (data?.photoUrl) {
+      setUserPhoto(String(data.photoUrl));
+      localStorage.setItem("conexao_trade_user_photo", String(data.photoUrl));
+    } else {
+      localStorage.removeItem("conexao_trade_user_photo");
+      setUserPhoto(null);
+    }
+    persistUser(data);
+    return data;
+  }, [apiBaseUrl, getToken, persistUser]);
+
+  const readFileAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          resolve(reader.result);
+        } else {
+          reject(new Error("Formato de arquivo invalido."));
+        }
+      };
+      reader.onerror = () => reject(reader.error || new Error("Erro ao ler arquivo."));
+      reader.readAsDataURL(file);
+    });
+
+  const applyTheme = useCallback((nextTheme: ThemeOption) => {
+    document.documentElement.classList.toggle("theme-dark", nextTheme === "dark");
+    localStorage.setItem("conexao_trade_theme", nextTheme);
+  }, []);
+
+  const toggleTheme = (nextTheme: ThemeOption) => {
+    setTheme(nextTheme);
+    applyTheme(nextTheme);
+  };
 
   useEffect(() => {
     const storedUser = typeof window !== "undefined" ? localStorage.getItem("conexao_trade_user") : null;
@@ -65,37 +130,16 @@ export default function PainelLayout({ children }: LayoutProps) {
     }
 
     // sincroniza com backend, se token disponivel
-    const token = typeof window !== "undefined" ? localStorage.getItem("conexao_trade_token") : null;
-    if (token) {
-      fetch(`${apiBaseUrl}/api/usuarios/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then(async (res) => {
-          if (!res.ok) return;
-          const data = await res.json();
-          if (data?.name) setUserName(String(data.name));
-          if (data?.email) setUserEmail(String(data.email));
-          if (data?.login) setUserLogin(String(data.login));
-          if (data?.role) setUserRole(String(data.role));
-          if (data?.photoUrl) {
-            setUserPhoto(String(data.photoUrl));
-            localStorage.setItem("conexao_trade_user_photo", String(data.photoUrl));
-          } else {
-            localStorage.removeItem("conexao_trade_user_photo");
-          }
-          localStorage.setItem("conexao_trade_user", JSON.stringify(data));
-        })
-        .catch(() => {
-          /* ignora falha de sincronizacao */
-        });
-    }
+    syncUserFromApi().catch(() => {
+      /* ignora falha de sincronizacao */
+    });
 
     const stored = typeof window !== "undefined" ? localStorage.getItem("conexao_trade_theme") : null;
     const prefersDark = typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
     const nextTheme: ThemeOption = stored === "dark" || stored === "light" ? (stored as ThemeOption) : prefersDark ? "dark" : "light";
     applyTheme(nextTheme);
     setTheme(nextTheme);
-  }, []);
+  }, [applyTheme, syncUserFromApi]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -106,16 +150,6 @@ export default function PainelLayout({ children }: LayoutProps) {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  const applyTheme = (nextTheme: ThemeOption) => {
-    document.documentElement.classList.toggle("theme-dark", nextTheme === "dark");
-    localStorage.setItem("conexao_trade_theme", nextTheme);
-  };
-
-  const toggleTheme = (nextTheme: ThemeOption) => {
-    setTheme(nextTheme);
-    applyTheme(nextTheme);
-  };
 
   const getInitials = (name: string) => {
     const parts = name.trim().split(" ").filter(Boolean);
@@ -381,24 +415,48 @@ export default function PainelLayout({ children }: LayoutProps) {
                 return;
               }
               try {
+                const token = getToken();
+                if (!token) {
+                  setPhotoMsg("Token ausente. Faca login novamente.");
+                  return;
+                }
+
                 setPhotoSaving(true);
-                // aqui voce integra com sua API: ex: POST `${apiBaseUrl}/api/usuarios/me/foto`
-                await new Promise((res) => setTimeout(res, 600));
-                const reader = new FileReader();
-                reader.onload = () => {
-                  const result = typeof reader.result === "string" ? reader.result : null;
-                  if (result) {
-                    localStorage.setItem("conexao_trade_user_photo", result);
-                    setPhotoPreview(result);
-                    setUserPhoto(result);
-                  }
-                  setPhotoMsg("Foto atualizada com sucesso.");
-                  setPhotoSaving(false);
-                };
-                reader.readAsDataURL(photoFile);
+                const photoDataUrl = await readFileAsDataUrl(photoFile);
+
+                const res = await fetch(`${apiBaseUrl}/api/usuarios/me/foto`, {
+                  method: "PUT",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({ photoUrl: photoDataUrl }),
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                  setPhotoMsg(data?.message || "Erro ao salvar foto. Tente novamente.");
+                  return;
+                }
+
+                const finalPhoto = data?.usuario?.photoUrl || photoDataUrl;
+                if (finalPhoto) {
+                  localStorage.setItem("conexao_trade_user_photo", finalPhoto);
+                  setPhotoPreview(finalPhoto);
+                  setUserPhoto(finalPhoto);
+                  persistUser({ photoUrl: finalPhoto });
+                } else {
+                  setPhotoPreview(null);
+                  setUserPhoto(null);
+                  localStorage.removeItem("conexao_trade_user_photo");
+                  persistUser({ photoUrl: null });
+                }
+
+                setPhotoMsg(data?.message || "Foto atualizada com sucesso.");
               } catch (err) {
                 console.error(err);
                 setPhotoMsg("Erro ao salvar foto. Tente novamente.");
+              } finally {
                 setPhotoSaving(false);
               }
             }}
@@ -443,6 +501,7 @@ export default function PainelLayout({ children }: LayoutProps) {
             className="modal-form"
             onSubmit={async (e) => {
               e.preventDefault();
+              const formEl = e.currentTarget;
               const formData = new FormData(e.currentTarget);
               const atual = String(formData.get("senhaAtual") || "");
               const nova = String(formData.get("novaSenha") || "");
@@ -461,9 +520,32 @@ export default function PainelLayout({ children }: LayoutProps) {
 
               try {
                 setPasswordSaving(true);
-                // aqui voce integra com sua API: ex: PUT `${apiBaseUrl}/api/usuarios/me/senha`
-                await new Promise((res) => setTimeout(res, 600));
-                setPasswordMsg("Senha atualizada com sucesso.");
+                const token = getToken();
+                if (!token) {
+                  setPasswordError("Token ausente. Faca login novamente.");
+                  return;
+                }
+
+                const res = await fetch(`${apiBaseUrl}/api/usuarios/me/senha`, {
+                  method: "PUT",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({
+                    senhaAtual: atual,
+                    novaSenha: nova,
+                  }),
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                  setPasswordError(data?.message || "Erro ao atualizar senha. Tente novamente.");
+                  return;
+                }
+
+                setPasswordMsg(data?.message || "Senha atualizada com sucesso.");
+                formEl.reset();
               } catch (err) {
                 console.error(err);
                 setPasswordError("Erro ao atualizar senha. Tente novamente.");

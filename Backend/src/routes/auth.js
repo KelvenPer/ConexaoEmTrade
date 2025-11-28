@@ -80,6 +80,7 @@ router.post("/novoCadastro", async (req, res) => {
         tenantId,
         supplierId,
         retailId,
+        allowRelationOverride: true,
       });
     } catch (e) {
       return res.status(400).json({ message: e.message });

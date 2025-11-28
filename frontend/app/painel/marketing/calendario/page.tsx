@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 type CalendarItem = {
   id: number;
@@ -148,7 +149,7 @@ export default function CalendarioCampanhasPage() {
 
   async function carregarSuppliers() {
     try {
-      const res = await fetch(`${apiBaseUrl}/api/fornecedores`);
+      const res = await apiFetch(`${apiBaseUrl}/api/fornecedores`);
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.message || "Erro ao carregar fornecedores.");
@@ -169,7 +170,7 @@ export default function CalendarioCampanhasPage() {
       if (endDate) params.append("end", endDate);
       if (supplierFilter) params.append("supplierId", supplierFilter);
 
-      const res = await fetch(
+      const res = await apiFetch(
         `${apiBaseUrl}/api/campanhas/calendar?${params.toString()}`
       );
       const json: ApiCalendarResponse | { message?: string } =

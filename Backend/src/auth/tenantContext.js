@@ -1,9 +1,15 @@
 const prisma = require("../prisma");
 
-async function resolveTenantContext({ tenantId, supplierId, retailId }) {
+async function resolveTenantContext({
+  tenantId,
+  supplierId,
+  retailId,
+  allowRelationOverride = false,
+}) {
+  const defaultTenantId = Number(process.env.DEFAULT_TENANT_ID || 1);
   let resolvedTenantId = tenantId ? Number(tenantId) : null;
-  let resolvedSupplierId = supplierId ? Number(supplierId) : null;
-  let resolvedRetailId = retailId ? Number(retailId) : null;
+  const resolvedSupplierId = supplierId ? Number(supplierId) : null;
+  const resolvedRetailId = retailId ? Number(retailId) : null;
 
   let supplier = null;
   let retail = null;
@@ -14,7 +20,7 @@ async function resolveTenantContext({ tenantId, supplierId, retailId }) {
       select: { id: true, tenantId: true },
     });
     if (!supplier) {
-      throw new Error("Fornecedor (supplierId) não encontrado.");
+      throw new Error("Fornecedor (supplierId) nao encontrado.");
     }
     resolvedTenantId = resolvedTenantId ?? supplier.tenantId;
   }
@@ -25,21 +31,33 @@ async function resolveTenantContext({ tenantId, supplierId, retailId }) {
       select: { id: true, tenantId: true },
     });
     if (!retail) {
-      throw new Error("Varejo (retailId) não encontrado.");
+      throw new Error("Varejo (retailId) nao encontrado.");
     }
     resolvedTenantId = resolvedTenantId ?? retail.tenantId;
   }
 
   if (!resolvedTenantId) {
-    throw new Error("tenantId é obrigatório (ou informe supplierId/retailId para inferir).");
+    if (allowRelationOverride) {
+      resolvedTenantId = defaultTenantId;
+    } else {
+      throw new Error("tenantId e obrigatorio (ou informe supplierId/retailId para inferir).");
+    }
   }
 
   if (supplier && supplier.tenantId !== resolvedTenantId) {
-    throw new Error("tenantId não corresponde ao fornecedor informado.");
+    if (allowRelationOverride) {
+      resolvedTenantId = supplier.tenantId;
+    } else {
+      throw new Error("tenantId nao corresponde ao fornecedor informado.");
+    }
   }
 
   if (retail && retail.tenantId !== resolvedTenantId) {
-    throw new Error("tenantId não corresponde ao varejo informado.");
+    if (allowRelationOverride) {
+      resolvedTenantId = retail.tenantId;
+    } else {
+      throw new Error("tenantId nao corresponde ao varejo informado.");
+    }
   }
 
   return { tenantId: resolvedTenantId, supplierId: resolvedSupplierId, retailId: resolvedRetailId };

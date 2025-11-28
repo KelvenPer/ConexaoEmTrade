@@ -87,7 +87,16 @@ export default function ConfigUsuariosPage() {
 
   async function carregarFornecedores() {
     try {
-      const res = await fetch(`${apiBaseUrl}/api/fornecedores/ativos`);
+      const token = getTokenOrFail();
+      if (!token) {
+        throw new Error("Token ausente. Faca login novamente.");
+      }
+
+      const res = await fetch(`${apiBaseUrl}/api/fornecedores/ativos`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.message || "Erro ao carregar fornecedores.");

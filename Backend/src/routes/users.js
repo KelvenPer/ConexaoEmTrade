@@ -104,6 +104,103 @@ router.get("/me", async (req, res) => {
 });
 
 /**
+ * PUT /api/usuarios/me/foto
+ * Atualiza a foto do usuario logado
+ */
+router.put("/me/foto", async (req, res) => {
+  try {
+    const decoded = requireAuth(req, res);
+    if (!decoded) return;
+
+    const userId = decoded.sub || decoded.id;
+    const { photoUrl } = req.body || {};
+
+    if (photoUrl === undefined) {
+      return res.status(400).json({ message: "photoUrl obrigatorio." });
+    }
+
+    const usuario = await prisma.TBLUSER.update({
+      where: { id: userId },
+      data: {
+        photoUrl: photoUrl || null,
+      },
+      select: {
+        id: true,
+        name: true,
+        login: true,
+        email: true,
+        role: true,
+        status: true,
+        photoUrl: true,
+        accessChannel: true,
+        supplierId: true,
+        retailId: true,
+        tenantId: true,
+        createdAt: true,
+      },
+    });
+
+    res.json({
+      message: "Foto atualizada com sucesso.",
+      usuario,
+    });
+  } catch (error) {
+    console.error("Erro ao atualizar foto do usuario logado:", error);
+    res.status(500).json({ message: "Erro ao atualizar foto do usuario." });
+  }
+});
+
+/**
+ * PUT /api/usuarios/me/senha
+ * Atualiza a senha do usuario logado
+ */
+router.put("/me/senha", async (req, res) => {
+  try {
+    const decoded = requireAuth(req, res);
+    if (!decoded) return;
+
+    const userId = decoded.sub || decoded.id;
+    const { senhaAtual, novaSenha } = req.body || {};
+
+    if (!senhaAtual || !novaSenha) {
+      return res
+        .status(400)
+        .json({ message: "Senha atual e nova senha sao obrigatorias." });
+    }
+
+    const usuario = await prisma.TBLUSER.findUnique({
+      where: { id: userId },
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ message: "Usuario nao encontrado." });
+    }
+
+    const senhaConfere = await bcrypt.compare(
+      senhaAtual,
+      usuario.passwordHash || ""
+    );
+
+    if (!senhaConfere) {
+      return res.status(400).json({ message: "Senha atual incorreta." });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(novaSenha, salt);
+
+    await prisma.TBLUSER.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+
+    res.json({ message: "Senha atualizada com sucesso." });
+  } catch (error) {
+    console.error("Erro ao atualizar senha do usuario logado:", error);
+    res.status(500).json({ message: "Erro ao atualizar senha do usuario." });
+  }
+});
+
+/**
  * GET /api/usuarios/:id
  * Busca um usuario pelo ID
  */
@@ -170,6 +267,10 @@ router.post("/", async (req, res) => {
       tenantId,
     } = req.body;
 
+    const parsedTenantId = tenantId === "" ? undefined : tenantId;
+    const parsedSupplierId = supplierId === "" ? undefined : supplierId;
+    const parsedRetailId = retailId === "" ? undefined : retailId;
+
     if (!name || !email || !login || !password) {
       return res.status(400).json({
         message: "Nome, login, e-mail e senha sao obrigatorios.",
@@ -195,9 +296,15 @@ router.post("/", async (req, res) => {
     }
 
     // Regras de tenant: PLATFORM_ADMIN cria qualquer tenant; TENANT_ADMIN apenas no seu tenant/canal.
-    const targetTenant = tenantId || currentUser.tenantId;
+    // Se for super admin e nao informar tenant/supplier/retail, usamos o tenant atual dele como fallback.
+    const fallbackTenantForPlatform =
+      (currentUser.tenantId ?? Number(process.env.DEFAULT_TENANT_ID || 1)) || 1;
+    const targetTenant =
+      currentUser.role === UserRole.PLATFORM_ADMIN
+        ? parsedTenantId ?? (!parsedSupplierId && !parsedRetailId ? fallbackTenantForPlatform : null)
+        : parsedTenantId || currentUser.tenantId;
     const channel = normalizeChannel(
-      accessChannel || (retailId ? AccessChannel.varejo : AccessChannel.industria)
+      accessChannel || (parsedRetailId ? AccessChannel.varejo : AccessChannel.industria)
     );
 
     if (currentUser.role === UserRole.TENANT_ADMIN) {
@@ -220,8 +327,9 @@ router.post("/", async (req, res) => {
     try {
       tenantContext = await resolveTenantContext({
         tenantId: targetTenant,
-        supplierId,
-        retailId,
+        supplierId: parsedSupplierId,
+        retailId: parsedRetailId,
+        allowRelationOverride: currentUser.role === UserRole.PLATFORM_ADMIN,
       });
     } catch (e) {
       return res.status(400).json({ message: e.message });
@@ -298,6 +406,23 @@ router.put("/:id", async (req, res) => {
       tenantId,
     } = req.body;
 
+    // Correção: Define e converte os IDs do corpo da requisição para corrigir o ReferenceError.
+    // Trata strings vazias como undefined e mantém nulos como nulos.
+    const parsedTenantId = (tenantId != null && tenantId !== '') ? parseInt(tenantId, 10) : (tenantId === null ? null : undefined);
+    const parsedSupplierId = (supplierId != null && supplierId !== '') ? parseInt(supplierId, 10) : (supplierId === null ? null : undefined);
+    const parsedRetailId = (retailId != null && retailId !== '') ? parseInt(retailId, 10) : (retailId === null ? null : undefined);
+
+    // Valida que, se os IDs foram fornecidos com um valor, são números válidos.
+    if ((tenantId != null && tenantId !== "") && Number.isNaN(parsedTenantId)) {
+      return res.status(400).json({ message: "O ID do tenant é inválido." });
+    }
+    if ((supplierId != null && supplierId !== "") && Number.isNaN(parsedSupplierId)) {
+      return res.status(400).json({ message: "O ID do fornecedor é inválido." });
+    }
+    if ((retailId != null && retailId !== "") && Number.isNaN(parsedRetailId)) {
+      return res.status(400).json({ message: "O ID do varejista é inválido." });
+    }
+
     const usuarioAtual = await prisma.TBLUSER.findFirst({
       where: buildMultiTenantWhere(currentUser, { id }),
     });
@@ -338,7 +463,18 @@ router.put("/:id", async (req, res) => {
       passwordHash = await bcrypt.hash(password, salt);
     }
 
-    const targetTenant = tenantId ?? usuarioAtual.tenantId;
+    // Para PLATFORM_ADMIN, permitimos que o tenant seja inferido pelo supplier/retail se não for enviado.
+    // Para TENANT_ADMIN/USER, mantemos o tenant atual se não vier no payload.
+    const effectiveSupplierId = parsedSupplierId !== undefined ? parsedSupplierId : usuarioAtual.supplierId;
+    const effectiveRetailId = parsedRetailId !== undefined ? parsedRetailId : usuarioAtual.retailId;
+
+    const shouldInferTenant =
+      currentUser.role === UserRole.PLATFORM_ADMIN &&
+      parsedTenantId === undefined &&
+      (effectiveSupplierId !== undefined || effectiveRetailId !== undefined);
+    const targetTenant = shouldInferTenant
+      ? null
+      : parsedTenantId ?? usuarioAtual.tenantId ?? currentUser.tenantId ?? 1;
     const channel = normalizeChannel(
       accessChannel ?? usuarioAtual.accessChannel ?? AccessChannel.industria
     );
@@ -363,8 +499,9 @@ router.put("/:id", async (req, res) => {
     try {
       tenantContext = await resolveTenantContext({
         tenantId: targetTenant,
-        supplierId: supplierId ?? usuarioAtual.supplierId,
-        retailId: retailId ?? usuarioAtual.retailId,
+        supplierId: effectiveSupplierId,
+        retailId: effectiveRetailId,
+        allowRelationOverride: currentUser.role === UserRole.PLATFORM_ADMIN,
       });
     } catch (e) {
       return res.status(400).json({ message: e.message });

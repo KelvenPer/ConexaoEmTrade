@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -143,8 +144,8 @@ export default function CampanhasConteudoPage() {
     try {
       setLoadingBase(true);
       const [resFor, resAtv] = await Promise.all([
-        fetch(`${API_BASE}/api/fornecedores`),
-        fetch(`${API_BASE}/api/ativos/ativos`),
+        apiFetch(`${API_BASE}/api/fornecedores`),
+        apiFetch(`${API_BASE}/api/ativos/ativos`),
       ]);
 
       const dataFor = await resFor.json();
@@ -172,7 +173,7 @@ export default function CampanhasConteudoPage() {
   async function carregarListaCampanhas() {
     try {
       setLoadingList(true);
-      const res = await fetch(`${API_BASE}/api/campanhas`);
+      const res = await apiFetch(`${API_BASE}/api/campanhas`);
       const data = await res.json();
 
       if (!res.ok) {
@@ -194,7 +195,7 @@ export default function CampanhasConteudoPage() {
       setErrorMsg("");
       setSuccessMsg("");
 
-      const res = await fetch(`${API_BASE}/api/campanhas/${id}`);
+      const res = await apiFetch(`${API_BASE}/api/campanhas/${id}`);
       const data: Campanha = await res.json();
 
       if (!res.ok) {
@@ -302,17 +303,8 @@ export default function CampanhasConteudoPage() {
         status: headerForm.status || "planejada",
       };
 
-      let url = `${API_BASE}/api/campanhas`;
-      let method: "POST" | "PUT" = "POST";
-
-      if (selectedCampanhaId) {
-        url = `${API_BASE}/api/campanhas/${selectedCampanhaId}`;
-        method = "PUT";
-      }
-
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
@@ -383,9 +375,8 @@ export default function CampanhasConteudoPage() {
         method = "POST";
       }
 
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
@@ -436,7 +427,7 @@ export default function CampanhasConteudoPage() {
     try {
       setErrorMsg("");
       setSuccessMsg("");
-      const res = await fetch(
+      const res = await apiFetch(
         `${API_BASE}/api/campanhas/itens/${itemId}`,
         { method: "DELETE" }
       );
