@@ -165,7 +165,7 @@ export default function ConfigUsuariosPage() {
       role: usuario.role || "USER",
       status: usuario.status || "ativo",
       accessChannel: usuario.accessChannel || "industria",
-      supplierId: usuario.supplierId ?? "",
+      supplierId: usuario.supplierId != null ? String(usuario.supplierId) : "",
     });
     setErrorMsg("");
     setSuccessMsg("");

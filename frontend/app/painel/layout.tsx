@@ -260,6 +260,13 @@ export default function PainelLayout({ children }: LayoutProps) {
                 Usuarios
               </NavItem>
               <NavItem
+                href="/painel/config/produtos"
+                pathname={pathname}
+                icon={<Boxes size={16} />}
+              >
+                Produtos
+              </NavItem>
+              <NavItem
                 href="/painel/config/fornecedores"
                 pathname={pathname}
                 icon={<Factory size={16} />}
@@ -272,6 +279,13 @@ export default function PainelLayout({ children }: LayoutProps) {
                 icon={<Settings2 size={16} />}
               >
                 Ativos de midia
+              </NavItem>
+              <NavItem
+                href="/painel/config/varejo"
+                pathname={pathname}
+                icon={<Factory size={16} />}
+              >
+                Varejo
               </NavItem>
             </NavGroup>
           )}
@@ -289,7 +303,7 @@ export default function PainelLayout({ children }: LayoutProps) {
 
       {/* MAIN AREA */}
       <div className="app-shell__main">
-        {!pathname?.startsWith("/painel/config/perfil") && (
+        {!pathname?.startsWith("/painel/config") && (
           <header className="app-shell__topbar">
             <div className="app-shell__topbar-left">
               <div className="app-shell__topbar-title">Visao de Portfolio</div>

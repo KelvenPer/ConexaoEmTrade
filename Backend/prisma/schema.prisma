@@ -45,6 +45,7 @@ model TBLTENANT {
   suppliers TBLFORN[]
   retailers TBLRETAIL[]
   partnerships TBLPARTNERSHIP[]
+  products   TBLPROD[]
 }
 
 // =========================
@@ -71,6 +72,7 @@ model TBLFORN {
   vendasResumos TBLVENDASRESUMO[]
   users         TBLUSER[]
   partnerships  TBLPARTNERSHIP[]
+  products      TBLPROD[]
 }
 
 // =========================
@@ -144,6 +146,33 @@ model TBLATV {
 }
 
 // =========================
+// Produtos
+// =========================
+
+model TBLPROD {
+  id          Int      @id @default(autoincrement())
+  tenantId    Int
+  supplierId  Int
+  code        String
+  description String
+  complement  String?
+  brand       String?
+  category    String?
+  status      String   @default("ativo")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant   TBLTENANT @relation(fields: [tenantId], references: [id])
+  supplier TBLFORN   @relation(fields: [supplierId], references: [id])
+
+  jbpItens         TBLJBPITEM[]
+  campanhaItens    TBLCAMPANHAITEM[]
+  retailMediaItens TBLRETAILMEDIA_ITEM[]
+
+  @@unique([tenantId, code])
+}
+
+// =========================
 // JBP
 // =========================
 
@@ -178,6 +207,7 @@ model TBLJBPITEM {
   id                  Int       @id @default(autoincrement())
   jbpId               Int
   assetId             Int
+  productId           Int?
   description         String?
   initiativeType      String    @default("JBP")
   periodStart         DateTime?
@@ -191,6 +221,7 @@ model TBLJBPITEM {
 
   jbp   TBLJBP @relation(fields: [jbpId], references: [id])
   asset TBLATV @relation(fields: [assetId], references: [id])
+  product TBLPROD? @relation(fields: [productId], references: [id])
 
   campanhaItens    TBLCAMPANHAITEM[]
   execTarefas      TBLEXECTAREFA[]
@@ -226,6 +257,7 @@ model TBLCAMPANHAITEM {
   campanhaId       Int
   jbpItemId        Int?
   assetId          Int
+  productId        Int?
   title            String?
   contentType      String?   // banner, video, push, post, etc.
   artDeadline      DateTime?
@@ -240,6 +272,7 @@ model TBLCAMPANHAITEM {
   campanha TBLCAMPANHA @relation(fields: [campanhaId], references: [id])
   jbpItem  TBLJBPITEM? @relation(fields: [jbpItemId], references: [id])
   asset    TBLATV      @relation(fields: [assetId], references: [id])
+  product  TBLPROD?    @relation(fields: [productId], references: [id])
 }
 
 // =========================
@@ -309,6 +342,7 @@ model TBLRETAILMEDIA_ITEM {
   planoRetailId     Int
   jbpItemId         Int?
   assetId           Int
+  productId         Int?
   pageType          String? // home, categoria, pdp...
   position          String? // topo, meio, rodape, carrossel...
   device            String? // desktop, mobile, ambos
@@ -321,6 +355,7 @@ model TBLRETAILMEDIA_ITEM {
   planoRetail TBLRETAILMEDIA_PLANO @relation(fields: [planoRetailId], references: [id])
   jbpItem     TBLJBPITEM?          @relation(fields: [jbpItemId], references: [id])
   asset       TBLATV               @relation(fields: [assetId], references: [id])
+  product     TBLPROD?             @relation(fields: [productId], references: [id])
 }
 
 // =========================

@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 
@@ -7,12 +8,12 @@ export default function JbpJvcPage() {
   const apiBaseUrl =
     process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-  const [jbps, setJbps] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
-  const [ativos, setAtivos] = useState([]);
+  const [jbps, setJbps] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [ativos, setAtivos] = useState<any[]>([]);
 
-  const [selectedJbpId, setSelectedJbpId] = useState(null);
-  const [selectedJbp, setSelectedJbp] = useState(null);
+  const [selectedJbpId, setSelectedJbpId] = useState<number | null>(null);
+  const [selectedJbp, setSelectedJbp] = useState<any>(null);
 
   const [loadingList, setLoadingList] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -35,8 +36,8 @@ export default function JbpJvcPage() {
     status: "rascunho",
   });
 
-  const [items, setItems] = useState([]);
-  const [editingItemId, setEditingItemId] = useState(null);
+  const [items, setItems] = useState<any[]>([]);
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [itemForm, setItemForm] = useState({
     assetId: "",
     initiativeType: "JBP",
@@ -72,7 +73,7 @@ export default function JbpJvcPage() {
 
       setSuppliers(dataFor);
       setAtivos(dataAtv);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Erro ao carregar dados base (fornecedores/ativos).");
     }
@@ -88,7 +89,7 @@ export default function JbpJvcPage() {
         throw new Error(data.message || "Erro ao listar JBPs.");
       }
       setJbps(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Erro ao listar JBPs.");
     } finally {
@@ -96,7 +97,7 @@ export default function JbpJvcPage() {
     }
   }
 
-  async function carregarDetalheJbp(id) {
+  async function carregarDetalheJbp(id: number) {
     try {
       setLoadingDetail(true);
       setErrorMsg("");
@@ -128,7 +129,7 @@ export default function JbpJvcPage() {
 
       setItems(data.itens || []);
       resetItemForm();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Erro ao carregar JBP.");
     } finally {
@@ -136,7 +137,9 @@ export default function JbpJvcPage() {
     }
   }
 
-  function handleHeaderChange(e) {
+  function handleHeaderChange(
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) {
     const { name, value } = e.target;
     setHeaderForm((prev) => ({
       ...prev,
@@ -144,7 +147,9 @@ export default function JbpJvcPage() {
     }));
   }
 
-  function handleItemChange(e) {
+  function handleItemChange(
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) {
     const { name, value } = e.target;
     setItemForm((prev) => ({
       ...prev,
@@ -189,7 +194,7 @@ export default function JbpJvcPage() {
     });
   }
 
-  async function handleSalvarHeader(e) {
+  async function handleSalvarHeader(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
@@ -244,7 +249,7 @@ export default function JbpJvcPage() {
         // acabou de criar, carrega detalhe
         await carregarDetalheJbp(data.id);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Erro ao salvar JBP.");
     } finally {
@@ -252,7 +257,7 @@ export default function JbpJvcPage() {
     }
   }
 
-  async function handleSalvarItem(e) {
+  async function handleSalvarItem(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
@@ -313,7 +318,7 @@ export default function JbpJvcPage() {
 
       await carregarDetalheJbp(selectedJbpId);
       resetItemForm();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Erro ao salvar item.");
     } finally {
@@ -321,7 +326,7 @@ export default function JbpJvcPage() {
     }
   }
 
-  function handleEditarItem(item) {
+  function handleEditarItem(item: any) {
     setEditingItemId(item.id);
     setItemForm({
       assetId: String(item.assetId),
@@ -348,7 +353,7 @@ export default function JbpJvcPage() {
     });
   }
 
-  async function handleExcluirItem(itemId) {
+  async function handleExcluirItem(itemId: number) {
     if (!window.confirm("Deseja realmente excluir este item do JBP?")) return;
 
     try {
@@ -367,7 +372,7 @@ export default function JbpJvcPage() {
       if (selectedJbpId) {
         await carregarDetalheJbp(selectedJbpId);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Erro ao excluir item.");
     }
@@ -399,7 +404,7 @@ export default function JbpJvcPage() {
           `Plano Execução ID: ${data.execPlanoId || "-"}\n` +
           `Plano Retail Media ID: ${data.retailPlanoId || "-"}`
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       alert(
         (err as Error).message ||
@@ -1759,7 +1764,7 @@ export default function JbpJvcPage() {
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="panel-field">
       <label className="panel-field__label">{label}</label>
@@ -1778,11 +1783,11 @@ const inputStyle = {
   background: "#ffffff",
 };
 
-const Th = ({ children }) => (
+const Th = ({ children }: { children: React.ReactNode }) => (
   <th className="panel-table__th">{children}</th>
 );
 
-const Td = ({ children }) => (
+const Td = ({ children }: { children: React.ReactNode }) => (
   <td className="panel-table__td">{children}</td>
 );
 

@@ -8,6 +8,8 @@ const userRoutes = require("./src/routes/users");
 const ativosRoutes = require("./src/routes/ativos");
 const jbpRoutes = require("./src/routes/jbp");
 const campanhasRoutes = require("./src/routes/campanhas");
+const produtosRoutes = require("./src/routes/produtos");
+const retailRoutes = require("./src/routes/retail");
 
 
 
@@ -31,6 +33,8 @@ app.use("/api/usuarios", userRoutes);
 app.use("/api/ativos", ativosRoutes);
 app.use("/api/jbp", jbpRoutes);
 app.use("/api/campanhas", campanhasRoutes);
+app.use("/api/produtos", produtosRoutes);
+app.use("/api/varejos", retailRoutes);
 
 const PORT = process.env.PORT || 8000;
 

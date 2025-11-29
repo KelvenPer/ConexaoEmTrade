@@ -303,6 +303,12 @@ export default function CampanhasConteudoPage() {
         status: headerForm.status || "planejada",
       };
 
+      const isEditing = Boolean(selectedCampanhaId);
+      const url = isEditing
+        ? `${API_BASE}/api/campanhas/${selectedCampanhaId}`
+        : `${API_BASE}/api/campanhas`;
+      const method: "POST" | "PUT" = isEditing ? "PUT" : "POST";
+
       const res = await apiFetch(url, {
         method,
         body: JSON.stringify(payload),

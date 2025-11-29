@@ -62,6 +62,30 @@ async function main() {
     },
   });
 
+  await prisma.tBLPROD.createMany({
+    data: [
+      {
+        tenantId: nestleTenant.id,
+        supplierId: nestleSupplier.id,
+        code: "NES-ACHO-200G",
+        description: "Achocolatado em po 200g",
+        brand: "Nescau",
+        category: "Achocolatado",
+        status: "ativo",
+      },
+      {
+        tenantId: nestleTenant.id,
+        supplierId: nestleSupplier.id,
+        code: "NES-LEITE-1L",
+        description: "Leite integral 1L",
+        brand: "Nestle",
+        category: "Lacteos",
+        status: "ativo",
+      },
+    ],
+    skipDuplicates: true,
+  });
+
   // 4) Varejo ligado ao tenant Varejo X
   const varejoX = await prisma.tBLRETAIL.create({
     data: {
