@@ -226,8 +226,89 @@ router.delete("/:id", async (req, res) => {
     ]);
 
     if (jbpCnt + campCnt + execCnt + retailMediaCnt + userCnt > 0) {
+      const [jbps, campanhas, execPlanos, retailPlanos, usuarios] = await Promise.all([
+        jbpCnt
+          ? prisma.TBLJBP.findMany({
+              where: { retailId: id },
+              select: { id: true, name: true },
+              take: 5,
+            })
+          : [],
+        campCnt
+          ? prisma.TBLCAMPANHA.findMany({
+              where: { retailId: id },
+              select: { id: true, name: true },
+              take: 5,
+            })
+          : [],
+        execCnt
+          ? prisma.TBLEXECPLANO.findMany({
+              where: { retailId: id },
+              select: { id: true, name: true },
+              take: 5,
+            })
+          : [],
+        retailMediaCnt
+          ? prisma.TBLRETAILMEDIA_PLANO.findMany({
+              where: { retailId: id },
+              select: { id: true, name: true },
+              take: 5,
+            })
+          : [],
+        userCnt
+          ? prisma.TBLUSER.findMany({
+              where: { retailId: id },
+              select: { id: true, name: true, email: true },
+              take: 5,
+            })
+          : [],
+      ]);
+
+      const conflicts = [];
+      if (userCnt) {
+        conflicts.push({
+          type: "usuarios",
+          label: "Usuarios vinculados",
+          count: userCnt,
+          samples: usuarios.map((u) => u.name || u.email || `Usuario #${u.id}`),
+        });
+      }
+      if (jbpCnt) {
+        conflicts.push({
+          type: "jbps",
+          label: "Planos/JBP",
+          count: jbpCnt,
+          samples: jbps.map((j) => j.name || `JBP #${j.id}`),
+        });
+      }
+      if (campCnt) {
+        conflicts.push({
+          type: "campanhas",
+          label: "Campanhas",
+          count: campCnt,
+          samples: campanhas.map((c) => c.name || `Campanha #${c.id}`),
+        });
+      }
+      if (execCnt) {
+        conflicts.push({
+          type: "execPlanos",
+          label: "Planos de execucao",
+          count: execCnt,
+          samples: execPlanos.map((p) => p.name || `Plano #${p.id}`),
+        });
+      }
+      if (retailMediaCnt) {
+        conflicts.push({
+          type: "retailMedia",
+          label: "Planos de Retail Media",
+          count: retailMediaCnt,
+          samples: retailPlanos.map((p) => p.name || `Retail media #${p.id}`),
+        });
+      }
+
       return res.status(400).json({
         message: "Varejo possui vinculacoes (usuarios, planos ou campanhas). Inative-o ou remova os vinculos antes de excluir.",
+        conflicts,
       });
     }
 

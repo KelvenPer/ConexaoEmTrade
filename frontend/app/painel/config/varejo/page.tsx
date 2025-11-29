@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { DeletionBlockInfo, DeletionConflictModal } from "../../components/DeletionConflictModal";
 
 type Varejo = {
   id: number;
@@ -40,6 +41,7 @@ export default function ConfigVarejoPage() {
   const [linkMsg, setLinkMsg] = useState("");
   const [linkLoading, setLinkLoading] = useState(false);
   const [lastCreated, setLastCreated] = useState<{ id: number; tenantId?: number | null; name: string } | null>(null);
+  const [blockInfo, setBlockInfo] = useState<DeletionBlockInfo | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -63,7 +65,7 @@ export default function ConfigVarejoPage() {
     return token || "";
   }
 
-  async function carregarVarejos() {
+  const carregarVarejos = useCallback(async () => {
     try {
       setLoading(true);
       setErrorMsg("");
@@ -77,17 +79,18 @@ export default function ConfigVarejoPage() {
       if (!res.ok) throw new Error(data.message || "Erro ao carregar varejos.");
 
       setVarejos(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao carregar varejos.");
+      const message = err instanceof Error ? err.message : "Erro ao carregar varejos.";
+      setErrorMsg(message);
     } finally {
       setLoading(false);
     }
-  }
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     carregarVarejos();
-  }, []);
+  }, [carregarVarejos]);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
@@ -177,9 +180,10 @@ export default function ConfigVarejoPage() {
       }
 
       if (!editingId) handleNovo();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao salvar varejo.");
+      const message = err instanceof Error ? err.message : "Erro ao salvar varejo.";
+      setErrorMsg(message);
     } finally {
       setSaving(false);
     }
@@ -191,6 +195,7 @@ export default function ConfigVarejoPage() {
     try {
       setErrorMsg("");
       setSuccessMsg("");
+      setBlockInfo(null);
       const token = getTokenOrFail();
       if (!token) throw new Error("Token ausente. Faca login novamente.");
 
@@ -199,14 +204,26 @@ export default function ConfigVarejoPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Erro ao excluir varejo.");
+      if (!res.ok) {
+        if (Array.isArray(data?.conflicts) && data.conflicts.length) {
+          const nome = varejoMap.get(id)?.name || "Varejo";
+          setBlockInfo({
+            title: `Nao foi possivel excluir ${nome}`,
+            message: data.message || "Este varejo possui vinculacoes que impedem a exclusao.",
+            conflicts: data.conflicts,
+          });
+        }
+        setErrorMsg(data.message || "Erro ao excluir varejo.");
+        return;
+      }
 
       setSuccessMsg(data.message || "Varejo excluido/inativado com sucesso.");
       await carregarVarejos();
       if (editingId === id) handleNovo();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao excluir varejo.");
+      const message = err instanceof Error ? err.message : "Erro ao excluir varejo.";
+      setErrorMsg(message);
     }
   }
 
@@ -232,9 +249,10 @@ export default function ConfigVarejoPage() {
 
       setSuccessMsg("Status do varejo atualizado.");
       await carregarVarejos();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao atualizar status.");
+      const message = err instanceof Error ? err.message : "Erro ao atualizar status.";
+      setErrorMsg(message);
     }
   }
 
@@ -251,9 +269,10 @@ export default function ConfigVarejoPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erro ao carregar usuarios.");
       setUsuarios(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setLinkMsg(err.message || "Erro ao carregar usuarios.");
+      const message = err instanceof Error ? err.message : "Erro ao carregar usuarios.";
+      setLinkMsg(message);
     } finally {
       setLinkLoading(false);
     }
@@ -295,9 +314,10 @@ export default function ConfigVarejoPage() {
       setLinkMsg("Usuario vinculado como admin deste varejo.");
       setSelectedUserId("");
       await carregarUsuariosSePreciso();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setLinkMsg(err.message || "Erro ao vincular usuario.");
+      const message = err instanceof Error ? err.message : "Erro ao vincular usuario.";
+      setLinkMsg(message);
     } finally {
       setLinkLoading(false);
     }
@@ -670,6 +690,12 @@ export default function ConfigVarejoPage() {
             </div>
           </div>
         </div>
+      )}
+      {blockInfo && (
+        <DeletionConflictModal
+          info={blockInfo}
+          onClose={() => setBlockInfo(null)}
+        />
       )}
     </div>
   );

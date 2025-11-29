@@ -160,11 +160,13 @@ export default function CampanhasConteudoPage() {
 
       setSuppliers(dataFor);
       setAtivos(dataAtv);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(
-        err.message || "Erro ao carregar dados base (fornecedores/ativos)."
-      );
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Erro ao carregar dados base (fornecedores/ativos).";
+      setErrorMsg(message);
     } finally {
       setLoadingBase(false);
     }
@@ -181,9 +183,10 @@ export default function CampanhasConteudoPage() {
       }
 
       setCampanhas(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao listar campanhas.");
+      const message = err instanceof Error ? err.message : "Erro ao listar campanhas.";
+      setErrorMsg(message);
     } finally {
       setLoadingList(false);
     }
@@ -196,10 +199,11 @@ export default function CampanhasConteudoPage() {
       setSuccessMsg("");
 
       const res = await apiFetch(`${API_BASE}/api/campanhas/${id}`);
-      const data: Campanha = await res.json();
+      const data: Campanha & { message?: string } = await res.json();
 
       if (!res.ok) {
-        throw new Error((data as any).message || "Erro ao carregar campanha.");
+        const maybeMessage = data.message;
+        throw new Error(maybeMessage || "Erro ao carregar campanha.");
       }
 
       setSelectedCampanhaId(id);
@@ -220,9 +224,10 @@ export default function CampanhasConteudoPage() {
       });
 
       resetItemForm();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao carregar campanha.");
+      const message = err instanceof Error ? err.message : "Erro ao carregar campanha.";
+      setErrorMsg(message);
     } finally {
       setLoadingDetail(false);
     }
@@ -330,9 +335,10 @@ export default function CampanhasConteudoPage() {
       if (!selectedCampanhaId) {
         await carregarDetalheCampanha(data.id);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao salvar campanha.");
+      const message = err instanceof Error ? err.message : "Erro ao salvar campanha.";
+      setErrorMsg(message);
     } finally {
       setSavingHeader(false);
     }
@@ -399,9 +405,10 @@ export default function CampanhasConteudoPage() {
 
       await carregarDetalheCampanha(selectedCampanhaId);
       resetItemForm();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao salvar peca.");
+      const message = err instanceof Error ? err.message : "Erro ao salvar peca.";
+      setErrorMsg(message);
     } finally {
       setSavingItem(false);
     }
@@ -446,9 +453,10 @@ export default function CampanhasConteudoPage() {
       if (selectedCampanhaId) {
         await carregarDetalheCampanha(selectedCampanhaId);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao excluir peca.");
+      const message = err instanceof Error ? err.message : "Erro ao excluir peca.";
+      setErrorMsg(message);
     }
   }
 

@@ -155,7 +155,7 @@ export default function CalendarioCampanhasPage() {
         throw new Error(data.message || "Erro ao carregar fornecedores.");
       }
       setSuppliers(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
     }
   }
@@ -173,17 +173,18 @@ export default function CalendarioCampanhasPage() {
       const res = await apiFetch(
         `${apiBaseUrl}/api/campanhas/calendar?${params.toString()}`
       );
-      const json: ApiCalendarResponse | { message?: string } =
-        await res.json();
+      const json: ApiCalendarResponse | { message?: string } = await res.json();
 
       if (!res.ok || !("campanhas" in json)) {
-        throw new Error((json as any).message || "Erro ao carregar calendario.");
+        const maybeMessage = (json as { message?: string }).message;
+        throw new Error(maybeMessage || "Erro ao carregar calendario.");
       }
 
       setData(json.campanhas);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao carregar calendario.");
+      const message = err instanceof Error ? err.message : "Erro ao carregar calendario.";
+      setErrorMsg(message);
     } finally {
       setLoading(false);
     }
@@ -389,11 +390,15 @@ export default function CalendarioCampanhasPage() {
 
                     if (c.periodStart) {
                       const d = new Date(c.periodStart);
-                      !Number.isNaN(d.getTime()) && dates.push(d);
+                      if (!Number.isNaN(d.getTime())) {
+                        dates.push(d);
+                      }
                     }
                     if (c.periodEnd) {
                       const d = new Date(c.periodEnd);
-                      !Number.isNaN(d.getTime()) && dates.push(d);
+                      if (!Number.isNaN(d.getTime())) {
+                        dates.push(d);
+                      }
                     }
 
                     c.items.forEach((it) => {
@@ -403,7 +408,9 @@ export default function CalendarioCampanhasPage() {
                         it.artDeadline;
                       if (main) {
                         const d = new Date(main);
-                        !Number.isNaN(d.getTime()) && dates.push(d);
+                        if (!Number.isNaN(d.getTime())) {
+                          dates.push(d);
+                        }
                       }
                     });
 

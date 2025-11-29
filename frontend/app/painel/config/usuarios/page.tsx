@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { DeletionBlockInfo, DeletionConflictModal } from "../../components/DeletionConflictModal";
 
 type Usuario = {
   id: number;
@@ -32,6 +33,7 @@ export default function ConfigUsuariosPage() {
   const [successMsg, setSuccessMsg] = useState("");
 
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [blockInfo, setBlockInfo] = useState<DeletionBlockInfo | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -58,7 +60,7 @@ export default function ConfigUsuariosPage() {
     return token || "";
   }
 
-  async function carregarUsuarios() {
+  const carregarUsuarios = useCallback(async () => {
     try {
       setLoading(true);
       setErrorMsg("");
@@ -77,15 +79,16 @@ export default function ConfigUsuariosPage() {
         throw new Error(data.message || "Erro ao carregar usuarios.");
       }
       setUsuarios(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao carregar usuarios.");
+      const message = err instanceof Error ? err.message : "Erro ao carregar usuarios.";
+      setErrorMsg(message);
     } finally {
       setLoading(false);
     }
-  }
+  }, [apiBaseUrl]);
 
-  async function carregarFornecedores() {
+  const carregarFornecedores = useCallback(async () => {
     try {
       const token = getTokenOrFail();
       if (!token) {
@@ -102,16 +105,17 @@ export default function ConfigUsuariosPage() {
         throw new Error(data.message || "Erro ao carregar fornecedores.");
       }
       setFornecedores(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao carregar fornecedores.");
+      const message = err instanceof Error ? err.message : "Erro ao carregar fornecedores.";
+      setErrorMsg(message);
     }
-  }
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     carregarUsuarios();
     carregarFornecedores();
-  }, []);
+  }, [carregarUsuarios, carregarFornecedores]);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
@@ -198,7 +202,7 @@ export default function ConfigUsuariosPage() {
         throw new Error("Token ausente. Faca login novamente.");
       }
 
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         name: form.name,
         login: form.login,
         email: form.email,
@@ -245,9 +249,10 @@ export default function ConfigUsuariosPage() {
       if (!editingId) {
         handleNovo();
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao salvar usuario.");
+      const message = err instanceof Error ? err.message : "Erro ao salvar usuario.";
+      setErrorMsg(message);
     } finally {
       setSaving(false);
     }
@@ -259,6 +264,7 @@ export default function ConfigUsuariosPage() {
     try {
       setErrorMsg("");
       setSuccessMsg("");
+      setBlockInfo(null);
       const token = getTokenOrFail();
       if (!token) {
         throw new Error("Token ausente. Faca login novamente.");
@@ -272,16 +278,26 @@ export default function ConfigUsuariosPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || "Erro ao excluir usuario.");
+        if (Array.isArray(data?.conflicts) && data.conflicts.length) {
+          const nome = usuarios.find((u) => u.id === id)?.name || "Usuario";
+          setBlockInfo({
+            title: `Nao foi possivel excluir ${nome}`,
+            message: data.message || "Este usuario possui vinculacoes que impedem a exclusao.",
+            conflicts: data.conflicts,
+          });
+        }
+        setErrorMsg(data.message || "Erro ao excluir usuario.");
+        return;
       }
       setSuccessMsg("Usuario excluido com sucesso.");
       await carregarUsuarios();
       if (editingId === id) {
         handleNovo();
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao excluir usuario.");
+      const message = err instanceof Error ? err.message : "Erro ao excluir usuario.";
+      setErrorMsg(message);
     }
   }
 
@@ -310,14 +326,16 @@ export default function ConfigUsuariosPage() {
       }
       setSuccessMsg("Status do usuario atualizado com sucesso.");
       await carregarUsuarios();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao atualizar status.");
+      const message = err instanceof Error ? err.message : "Erro ao atualizar status.";
+      setErrorMsg(message);
     }
   }
 
   return (
-    <div>
+    <>
+      <div>
       <h1
         style={{
           fontSize: 20,
@@ -685,7 +703,14 @@ export default function ConfigUsuariosPage() {
           )}
         </section>
       </div>
-    </div>
+      </div>
+      {blockInfo && (
+        <DeletionConflictModal
+          info={blockInfo}
+          onClose={() => setBlockInfo(null)}
+        />
+      )}
+    </>
   );
 }
 

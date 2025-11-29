@@ -412,8 +412,59 @@ router.delete("/:id", async (req, res) => {
     ]);
 
     if (jbpCount > 0 || campCount > 0 || retailCount > 0) {
+      const [jbpItens, campanhaItens, retailItens] = await Promise.all([
+        jbpCount
+          ? prisma.TBLJBPITEM.findMany({
+              where: { productId: id },
+              select: { id: true, description: true, jbp: { select: { name: true } } },
+              take: 5,
+            })
+          : [],
+        campCount
+          ? prisma.TBLCAMPANHAITEM.findMany({
+              where: { productId: id },
+              select: { id: true, title: true, campanha: { select: { name: true } } },
+              take: 5,
+            })
+          : [],
+        retailCount
+          ? prisma.TBLRETAILMEDIA_ITEM.findMany({
+              where: { productId: id },
+              select: { id: true, notes: true, planoRetail: { select: { name: true } } },
+              take: 5,
+            })
+          : [],
+      ]);
+
+      const conflicts = [];
+      if (jbpCount) {
+        conflicts.push({
+          type: "jbpItens",
+          label: "Itens de JBP",
+          count: jbpCount,
+          samples: jbpItens.map((i) => `${i.description || "Item"} (JBP ${i.jbp?.name || `#${i.id}`})`),
+        });
+      }
+      if (campCount) {
+        conflicts.push({
+          type: "campanhaItens",
+          label: "Itens de campanha",
+          count: campCount,
+          samples: campanhaItens.map((i) => `${i.title || "Peca"} (Campanha ${i.campanha?.name || `#${i.id}`})`),
+        });
+      }
+      if (retailCount) {
+        conflicts.push({
+          type: "retailMediaItens",
+          label: "Itens de retail media",
+          count: retailCount,
+          samples: retailItens.map((i) => `${i.notes || "Insercao"} (Plano ${i.planoRetail?.name || `#${i.id}`})`),
+        });
+      }
+
       return res.status(400).json({
         message: "Produto vinculado a planejamentos/campanhas. Inative-o ou remova os vinculos antes de excluir.",
+        conflicts,
       });
     }
 

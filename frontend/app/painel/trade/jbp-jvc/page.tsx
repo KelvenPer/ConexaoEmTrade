@@ -1,22 +1,71 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+
+type Supplier = {
+  id: number;
+  name?: string;
+  nome?: string;
+  fantasia?: string;
+};
+
+type Asset = {
+  id: number;
+  name: string;
+  channel?: string | null;
+  type?: string | null;
+  format?: string | null;
+};
+
+type JbpItem = {
+  id: number;
+  assetId: number;
+  initiativeType?: string | null;
+  description?: string | null;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  storeScope?: string | null;
+  unit?: string | null;
+  quantity?: number | null;
+  negotiatedUnitPrice?: number | null;
+  totalValue?: number | null;
+  notes?: string | null;
+  asset?: Asset | null;
+};
+
+type Jbp = {
+  id: number;
+  supplierId: number;
+  name: string;
+  year?: number | null;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  strategy?: string | null;
+  kpiSummary?: string | null;
+  totalBudget?: number | null;
+  status?: string;
+  itens?: JbpItem[];
+  supplier?: Supplier;
+};
+
+function getErrorMessage(err: unknown, fallback: string) {
+  return err instanceof Error ? err.message : fallback;
+}
 
 export default function JbpJvcPage() {
   const apiBaseUrl =
     process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-  const [jbps, setJbps] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [ativos, setAtivos] = useState<any[]>([]);
+  const [jbps, setJbps] = useState<Jbp[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [ativos, setAtivos] = useState<Asset[]>([]);
 
   const [selectedJbpId, setSelectedJbpId] = useState<number | null>(null);
-  const [selectedJbp, setSelectedJbp] = useState<any>(null);
+  const [selectedJbp, setSelectedJbp] = useState<Jbp | null>(null);
 
   const [loadingList, setLoadingList] = useState(false);
-  const [loadingDetail, setLoadingDetail] = useState(false);
   const [savingHeader, setSavingHeader] = useState(false);
   const [savingItem, setSavingItem] = useState(false);
 
@@ -36,7 +85,7 @@ export default function JbpJvcPage() {
     status: "rascunho",
   });
 
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<JbpItem[]>([]);
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [itemForm, setItemForm] = useState({
     assetId: "",
@@ -52,13 +101,7 @@ export default function JbpJvcPage() {
     notes: "",
   });
 
-  // Carregar fornecedores, ativos, e lista de JBPs
-  useEffect(() => {
-    carregarBase();
-    carregarListaJbps();
-  }, []);
-
-  async function carregarBase() {
+  const carregarBase = useCallback(async () => {
     try {
       // Fornecedores
       const resFor = await apiFetch(`${apiBaseUrl}/api/fornecedores`);
@@ -73,13 +116,13 @@ export default function JbpJvcPage() {
 
       setSuppliers(dataFor);
       setAtivos(dataAtv);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao carregar dados base (fornecedores/ativos).");
+      setErrorMsg(getErrorMessage(err, "Erro ao carregar dados base (fornecedores/ativos)."));
     }
-  }
+  }, [apiBaseUrl]);
 
-  async function carregarListaJbps() {
+  const carregarListaJbps = useCallback(async () => {
     try {
       setLoadingList(true);
       setErrorMsg("");
@@ -89,17 +132,22 @@ export default function JbpJvcPage() {
         throw new Error(data.message || "Erro ao listar JBPs.");
       }
       setJbps(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao listar JBPs.");
+      setErrorMsg(getErrorMessage(err, "Erro ao listar JBPs."));
     } finally {
       setLoadingList(false);
     }
-  }
+  }, [apiBaseUrl]);
+
+  // Carregar fornecedores, ativos, e lista de JBPs
+  useEffect(() => {
+    carregarBase();
+    carregarListaJbps();
+  }, [carregarBase, carregarListaJbps]);
 
   async function carregarDetalheJbp(id: number) {
     try {
-      setLoadingDetail(true);
       setErrorMsg("");
       setSuccessMsg("");
 
@@ -129,11 +177,9 @@ export default function JbpJvcPage() {
 
       setItems(data.itens || []);
       resetItemForm();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao carregar JBP.");
-    } finally {
-      setLoadingDetail(false);
+      setErrorMsg(getErrorMessage(err, "Erro ao carregar JBP."));
     }
   }
 
@@ -249,9 +295,9 @@ export default function JbpJvcPage() {
         // acabou de criar, carrega detalhe
         await carregarDetalheJbp(data.id);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao salvar JBP.");
+      setErrorMsg(getErrorMessage(err, "Erro ao salvar JBP."));
     } finally {
       setSavingHeader(false);
     }
@@ -318,15 +364,15 @@ export default function JbpJvcPage() {
 
       await carregarDetalheJbp(selectedJbpId);
       resetItemForm();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao salvar item.");
+      setErrorMsg(getErrorMessage(err, "Erro ao salvar item."));
     } finally {
       setSavingItem(false);
     }
   }
 
-  function handleEditarItem(item: any) {
+  function handleEditarItem(item: JbpItem) {
     setEditingItemId(item.id);
     setItemForm({
       assetId: String(item.assetId),
@@ -372,9 +418,9 @@ export default function JbpJvcPage() {
       if (selectedJbpId) {
         await carregarDetalheJbp(selectedJbpId);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao excluir item.");
+      setErrorMsg(getErrorMessage(err, "Erro ao excluir item."));
     }
   }
 
@@ -404,12 +450,9 @@ export default function JbpJvcPage() {
           `Plano Execução ID: ${data.execPlanoId || "-"}\n` +
           `Plano Retail Media ID: ${data.retailPlanoId || "-"}`
       );
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      alert(
-        (err as Error).message ||
-          "Erro ao gerar contrato a partir do JBP."
-      );
+      alert(getErrorMessage(err, "Erro ao gerar contrato a partir do JBP."));
     }
   }
 
@@ -423,7 +466,7 @@ export default function JbpJvcPage() {
       };
     }
 
-    let totalItens = items.length;
+    const totalItens = items.length;
     let totalJvc = 0;
     let valorTotal = 0;
     let valorJvc = 0;

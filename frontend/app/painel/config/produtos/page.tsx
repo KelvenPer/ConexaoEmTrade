@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { DeletionBlockInfo, DeletionConflictModal } from "../../components/DeletionConflictModal";
 
 type Produto = {
   id: number;
@@ -52,6 +53,7 @@ export default function ConfigProdutosPage() {
     supplierId: "",
     status: "ativo",
   });
+  const [blockInfo, setBlockInfo] = useState<DeletionBlockInfo | null>(null);
 
   const supplierMap = useMemo(() => {
     const map = new Map<number, string>();
@@ -67,7 +69,7 @@ export default function ConfigProdutosPage() {
     return token || "";
   }
 
-  async function carregarBase() {
+  const carregarBase = useCallback(async () => {
     try {
       const token = getTokenOrFail();
       if (!token) throw new Error("Token ausente. Faca login novamente.");
@@ -89,18 +91,19 @@ export default function ConfigProdutosPage() {
 
       setProdutos(dataProd);
       setFornecedores(dataFor);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao carregar dados.");
+      const message = err instanceof Error ? err.message : "Erro ao carregar dados.";
+      setErrorMsg(message);
     } finally {
       setLoading(false);
     }
-  }
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     setLoading(true);
     carregarBase();
-  }, []);
+  }, [carregarBase]);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
@@ -184,9 +187,10 @@ export default function ConfigProdutosPage() {
       );
       await carregarBase();
       if (!editingId) handleNovo();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao salvar produto.");
+      const message = err instanceof Error ? err.message : "Erro ao salvar produto.";
+      setErrorMsg(message);
     } finally {
       setSaving(false);
     }
@@ -197,6 +201,7 @@ export default function ConfigProdutosPage() {
     try {
       setErrorMsg("");
       setSuccessMsg("");
+      setBlockInfo(null);
       const token = getTokenOrFail();
       if (!token) throw new Error("Token ausente. Faca login novamente.");
 
@@ -205,14 +210,26 @@ export default function ConfigProdutosPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Erro ao excluir produto.");
+      if (!res.ok) {
+        if (Array.isArray(data?.conflicts) && data.conflicts.length) {
+          const nome = produtos.find((p) => p.id === id)?.description || "Produto";
+          setBlockInfo({
+            title: `Nao foi possivel excluir ${nome}`,
+            message: data.message || "Este produto possui vinculacoes que impedem a exclusao.",
+            conflicts: data.conflicts,
+          });
+        }
+        setErrorMsg(data.message || "Erro ao excluir produto.");
+        return;
+      }
 
       setSuccessMsg("Produto excluido com sucesso.");
       await carregarBase();
       if (editingId === id) handleNovo();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao excluir produto.");
+      const message = err instanceof Error ? err.message : "Erro ao excluir produto.";
+      setErrorMsg(message);
     }
   }
 
@@ -237,9 +254,10 @@ export default function ConfigProdutosPage() {
 
       setSuccessMsg("Status do produto atualizado.");
       await carregarBase();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao atualizar status.");
+      const message = err instanceof Error ? err.message : "Erro ao atualizar status.";
+      setErrorMsg(message);
     }
   }
 
@@ -270,9 +288,10 @@ export default function ConfigProdutosPage() {
       setCsvMsg(data.message || "Importacao concluida.");
       await carregarBase();
       setCsvFile(null);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setCsvMsg(err.message || "Erro ao importar CSV.");
+      const message = err instanceof Error ? err.message : "Erro ao importar CSV.";
+      setCsvMsg(message);
     } finally {
       setCsvLoading(false);
     }
@@ -305,9 +324,10 @@ export default function ConfigProdutosPage() {
       if (!res.ok) throw new Error(data.message || "Erro ao importar via banco.");
       setDbMsg(data.message || "Importacao concluida.");
       await carregarBase();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setDbMsg(err.message || "Erro ao importar via banco.");
+      const message = err instanceof Error ? err.message : "Erro ao importar via banco.";
+      setDbMsg(message);
     } finally {
       setDbLoading(false);
     }
@@ -785,6 +805,12 @@ export default function ConfigProdutosPage() {
             </div>
           </form>
         </Modal>
+      )}
+      {blockInfo && (
+        <DeletionConflictModal
+          info={blockInfo}
+          onClose={() => setBlockInfo(null)}
+        />
       )}
     </div>
   );

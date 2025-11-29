@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { DeletionBlockInfo, DeletionConflictModal } from "../../components/DeletionConflictModal";
 
 type Fornecedor = {
   id: number;
@@ -20,6 +21,7 @@ export default function ConfigFornecedoresPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [blockInfo, setBlockInfo] = useState<DeletionBlockInfo | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -37,7 +39,7 @@ export default function ConfigFornecedoresPage() {
     return token || "";
   }
 
-  async function carregarFornecedores() {
+  const carregarFornecedores = useCallback(async () => {
     try {
       setLoading(true);
       setErrorMsg("");
@@ -54,17 +56,18 @@ export default function ConfigFornecedoresPage() {
         throw new Error(data.message || "Erro ao carregar fornecedores.");
       }
       setFornecedores(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao carregar fornecedores.");
+      const message = err instanceof Error ? err.message : "Erro ao carregar fornecedores.";
+      setErrorMsg(message);
     } finally {
       setLoading(false);
     }
-  }
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     carregarFornecedores();
-  }, []);
+  }, [carregarFornecedores]);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
@@ -156,9 +159,10 @@ export default function ConfigFornecedoresPage() {
       if (!editingId) {
         handleNovo();
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao salvar fornecedor.");
+      const message = err instanceof Error ? err.message : "Erro ao salvar fornecedor.";
+      setErrorMsg(message);
     } finally {
       setSaving(false);
     }
@@ -170,6 +174,7 @@ export default function ConfigFornecedoresPage() {
     try {
       setErrorMsg("");
       setSuccessMsg("");
+      setBlockInfo(null);
       const token = getTokenOrFail();
       if (!token) {
         throw new Error("Token ausente. Faca login novamente.");
@@ -180,16 +185,26 @@ export default function ConfigFornecedoresPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || "Erro ao excluir fornecedor.");
+        if (Array.isArray(data?.conflicts) && data.conflicts.length) {
+          const nome = fornecedores.find((f) => f.id === id)?.name || "Fornecedor";
+          setBlockInfo({
+            title: `Nao foi possivel excluir ${nome}`,
+            message: data.message || "Este fornecedor possui vinculacoes que impedem a exclusao.",
+            conflicts: data.conflicts,
+          });
+        }
+        setErrorMsg(data.message || "Erro ao excluir fornecedor.");
+        return;
       }
       setSuccessMsg("Fornecedor excluido com sucesso.");
       await carregarFornecedores();
       if (editingId === id) {
         handleNovo();
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao excluir fornecedor.");
+      const message = err instanceof Error ? err.message : "Erro ao excluir fornecedor.";
+      setErrorMsg(message);
     }
   }
 
@@ -219,14 +234,16 @@ export default function ConfigFornecedoresPage() {
 
       setSuccessMsg("Status atualizado com sucesso.");
       await carregarFornecedores();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao atualizar status.");
+      const message = err instanceof Error ? err.message : "Erro ao atualizar status.";
+      setErrorMsg(message);
     }
   }
 
   return (
-    <div>
+    <>
+      <div>
       <h1
         style={{
           fontSize: 20,
@@ -524,7 +541,14 @@ export default function ConfigFornecedoresPage() {
           )}
         </section>
       </div>
-    </div>
+      </div>
+      {blockInfo && (
+        <DeletionConflictModal
+          info={blockInfo}
+          onClose={() => setBlockInfo(null)}
+        />
+      )}
+    </>
   );
 }
 

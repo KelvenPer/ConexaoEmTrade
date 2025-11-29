@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type Ativo = {
   id: number;
@@ -45,7 +45,7 @@ export default function ConfigAtivosPage() {
     return token || "";
   }
 
-  async function carregarAtivos() {
+  const carregarAtivos = useCallback(async () => {
     try {
       setLoading(true);
       setErrorMsg("");
@@ -62,17 +62,18 @@ export default function ConfigAtivosPage() {
         throw new Error(data.message || "Erro ao carregar ativos.");
       }
       setAtivos(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao carregar ativos.");
+      const message = err instanceof Error ? err.message : "Erro ao carregar ativos.";
+      setErrorMsg(message);
     } finally {
       setLoading(false);
     }
-  }
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     carregarAtivos();
-  }, []);
+  }, [carregarAtivos]);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
     const { name, value } = e.target;
@@ -187,9 +188,10 @@ export default function ConfigAtivosPage() {
       if (!editingId) {
         handleNovo();
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao salvar ativo.");
+      const message = err instanceof Error ? err.message : "Erro ao salvar ativo.";
+      setErrorMsg(message);
     } finally {
       setSaving(false);
     }
@@ -219,9 +221,10 @@ export default function ConfigAtivosPage() {
       if (editingId === id) {
         handleNovo();
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao excluir ativo.");
+      const message = err instanceof Error ? err.message : "Erro ao excluir ativo.";
+      setErrorMsg(message);
     }
   }
 
@@ -250,9 +253,10 @@ export default function ConfigAtivosPage() {
       }
       setSuccessMsg("Status do ativo atualizado com sucesso.");
       await carregarAtivos();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || "Erro ao atualizar status.");
+      const message = err instanceof Error ? err.message : "Erro ao atualizar status.";
+      setErrorMsg(message);
     }
   }
 

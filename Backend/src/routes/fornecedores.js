@@ -217,6 +217,167 @@ router.delete("/:id", async (req, res) => {
       return res.status(403).json({ message: err.message });
     }
 
+    const [
+      jbpCnt,
+      campCnt,
+      execCnt,
+      retailMediaCnt,
+      vendasCnt,
+      userCnt,
+      productCnt,
+      partnershipCnt,
+    ] = await Promise.all([
+      prisma.TBLJBP.count({ where: { supplierId: id } }),
+      prisma.TBLCAMPANHA.count({ where: { supplierId: id } }),
+      prisma.TBLEXECPLANO.count({ where: { supplierId: id } }),
+      prisma.TBLRETAILMEDIA_PLANO.count({ where: { supplierId: id } }),
+      prisma.TBLVENDASRESUMO.count({ where: { supplierId: id } }),
+      prisma.TBLUSER.count({ where: { supplierId: id } }),
+      prisma.TBLPROD.count({ where: { supplierId: id } }),
+      prisma.TBLPARTNERSHIP.count({ where: { supplierId: id } }),
+    ]);
+
+    if (jbpCnt + campCnt + execCnt + retailMediaCnt + vendasCnt + userCnt + productCnt + partnershipCnt > 0) {
+      const [
+        jbps,
+        campanhas,
+        execPlanos,
+        retailPlanos,
+        vendas,
+        usuarios,
+        produtos,
+        parcerias,
+      ] = await Promise.all([
+        jbpCnt
+          ? prisma.TBLJBP.findMany({ where: { supplierId: id }, select: { id: true, name: true }, take: 5 })
+          : [],
+        campCnt
+          ? prisma.TBLCAMPANHA.findMany({
+              where: { supplierId: id },
+              select: { id: true, name: true },
+              take: 5,
+            })
+          : [],
+        execCnt
+          ? prisma.TBLEXECPLANO.findMany({
+              where: { supplierId: id },
+              select: { id: true, name: true },
+              take: 5,
+            })
+          : [],
+        retailMediaCnt
+          ? prisma.TBLRETAILMEDIA_PLANO.findMany({
+              where: { supplierId: id },
+              select: { id: true, name: true },
+              take: 5,
+            })
+          : [],
+        vendasCnt
+          ? prisma.TBLVENDASRESUMO.findMany({
+              where: { supplierId: id },
+              select: { id: true, ano: true, mes: true, channel: true },
+              take: 5,
+            })
+          : [],
+        userCnt
+          ? prisma.TBLUSER.findMany({
+              where: { supplierId: id },
+              select: { id: true, name: true, email: true },
+              take: 5,
+            })
+          : [],
+        productCnt
+          ? prisma.TBLPROD.findMany({
+              where: { supplierId: id },
+              select: { id: true, code: true, description: true },
+              take: 5,
+            })
+          : [],
+        partnershipCnt
+          ? prisma.TBLPARTNERSHIP.findMany({
+              where: { supplierId: id },
+              select: { id: true, status: true, retail: { select: { name: true } } },
+              take: 5,
+            })
+          : [],
+      ]);
+
+      const conflicts = [];
+      if (productCnt) {
+        conflicts.push({
+          type: "produtos",
+          label: "Produtos vinculados",
+          count: productCnt,
+          samples: produtos.map((p) => `${p.code || `Produto #${p.id}`} - ${p.description || "sem descricao"}`),
+        });
+      }
+      if (userCnt) {
+        conflicts.push({
+          type: "usuarios",
+          label: "Usuarios vinculados",
+          count: userCnt,
+          samples: usuarios.map((u) => u.name || u.email || `Usuario #${u.id}`),
+        });
+      }
+      if (jbpCnt) {
+        conflicts.push({
+          type: "jbps",
+          label: "Planos/JBP",
+          count: jbpCnt,
+          samples: jbps.map((j) => j.name || `JBP #${j.id}`),
+        });
+      }
+      if (campCnt) {
+        conflicts.push({
+          type: "campanhas",
+          label: "Campanhas",
+          count: campCnt,
+          samples: campanhas.map((c) => c.name || `Campanha #${c.id}`),
+        });
+      }
+      if (execCnt) {
+        conflicts.push({
+          type: "execPlanos",
+          label: "Planos de execucao",
+          count: execCnt,
+          samples: execPlanos.map((p) => p.name || `Plano #${p.id}`),
+        });
+      }
+      if (retailMediaCnt) {
+        conflicts.push({
+          type: "retailMedia",
+          label: "Planos de Retail Media",
+          count: retailMediaCnt,
+          samples: retailPlanos.map((p) => p.name || `Retail media #${p.id}`),
+        });
+      }
+      if (vendasCnt) {
+        conflicts.push({
+          type: "vendas",
+          label: "Historico de vendas",
+          count: vendasCnt,
+          samples: vendas.map((v) => {
+            const mes = v.mes ? `/${v.mes}` : "";
+            return `Resumo ${v.ano}${mes} (${v.channel || "canal"})`;
+          }),
+        });
+      }
+      if (partnershipCnt) {
+        conflicts.push({
+          type: "parcerias",
+          label: "Parcerias com varejo",
+          count: partnershipCnt,
+          samples: parcerias.map((p) => `Parceria com ${p.retail?.name || "varejo"} (${p.status || "ativo"})`),
+        });
+      }
+
+      return res.status(400).json({
+        message:
+          "Fornecedor possui vinculacoes (produtos, usuarios, planos ou campanhas). Inative-o ou remova os vinculos antes de excluir.",
+        conflicts,
+      });
+    }
+
     // Remove contratos/parcerias antes de excluir o fornecedor para evitar violacao de FK
     await prisma.$transaction([
       prisma.TBLPARTNERSHIP.deleteMany({ where: { supplierId: id } }),

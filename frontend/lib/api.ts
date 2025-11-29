@@ -25,9 +25,7 @@ function handleUnauthorizedAccess(): void {
   }
 }
 
-interface ApiFetchOptions extends RequestInit {
-  // Podemos adicionar opções customizadas no futuro se necessário
-}
+type ApiFetchOptions = RequestInit;
 
 export async function apiFetch(
   url: string,
