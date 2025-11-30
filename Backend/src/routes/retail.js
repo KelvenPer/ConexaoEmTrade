@@ -21,7 +21,11 @@ async function scopedWhere(user, baseWhere = {}) {
 }
 
 function assertAdmin(currentUser) {
-  if (currentUser.role !== UserRole.PLATFORM_ADMIN && currentUser.role !== UserRole.TENANT_ADMIN) {
+  if (
+    currentUser.role !== UserRole.PLATFORM_ADMIN &&
+    currentUser.role !== UserRole.TENANT_ADMIN &&
+    currentUser.role !== UserRole.SUPER_ADMIN
+  ) {
     throw new Error("Apenas admin pode gerenciar varejos.");
   }
 }
@@ -162,7 +166,10 @@ router.put("/:id", async (req, res) => {
       return res.status(403).json({ message: "Acesso negado." });
     }
 
-    if (currentUser.role === UserRole.TENANT_ADMIN && Number(currentUser.tenantId) !== Number(varejo.tenantId)) {
+    if (
+      (currentUser.role === UserRole.TENANT_ADMIN || currentUser.role === UserRole.SUPER_ADMIN) &&
+      Number(currentUser.tenantId) !== Number(varejo.tenantId)
+    ) {
       return res.status(403).json({ message: "Tenant invalido para este admin." });
     }
 

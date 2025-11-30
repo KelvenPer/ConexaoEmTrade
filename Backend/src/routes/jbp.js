@@ -22,6 +22,7 @@ function assertCanWrite(user) {
   const channel = normalizeChannel(user.accessChannel);
   if (
     user.role === UserRole.PLATFORM_ADMIN ||
+    user.role === UserRole.SUPER_ADMIN ||
     user.role === UserRole.TENANT_ADMIN
   ) {
     return;
@@ -75,7 +76,9 @@ router.get("/", async (req, res) => {
       orderBy: [{ year: "desc" }, { createdAt: "desc" }],
       include: {
         supplier: true,
-        itens: true,
+        itens: {
+          include: { asset: true, product: true },
+        },
       },
     });
 
@@ -105,7 +108,7 @@ router.get("/:id", async (req, res) => {
       include: {
         supplier: true,
         itens: {
-          include: { asset: true },
+          include: { asset: true, product: true },
           orderBy: { id: "asc" },
         },
       },
@@ -389,6 +392,7 @@ router.post("/:id/itens", async (req, res) => {
 
     const {
       assetId,
+      productId,
       description,
       initiativeType,
       periodStart,
@@ -413,6 +417,7 @@ router.post("/:id/itens", async (req, res) => {
     const dataToCreate = {
       jbpId,
       assetId: assetIdNumber,
+      productId: productId ? Number(productId) : null,
       description: description || null,
       initiativeType: initiativeType || "JBP",
       storeScope: storeScope || null,
@@ -497,6 +502,7 @@ router.put("/itens/:itemId", async (req, res) => {
 
     const {
       assetId,
+      productId,
       description,
       initiativeType,
       periodStart,
@@ -515,6 +521,18 @@ router.put("/itens/:itemId", async (req, res) => {
       const a = Number(assetId);
       if (!Number.isNaN(a)) dataToUpdate.assetId = a;
       else return res.status(400).json({ message: "Ativo invalido." });
+    }
+
+    if (productId !== undefined) {
+      if (productId === null || productId === "") {
+        dataToUpdate.productId = null;
+      } else {
+        const pId = Number(productId);
+        if (Number.isNaN(pId)) {
+          return res.status(400).json({ message: "Produto invalido." });
+        }
+        dataToUpdate.productId = pId;
+      }
     }
 
     if (description !== undefined) dataToUpdate.description = description || null;

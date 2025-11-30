@@ -22,6 +22,7 @@ function assertCanWrite(user) {
   const channel = normalizeChannel(user.accessChannel);
   if (
     user.role === UserRole.PLATFORM_ADMIN ||
+    user.role === UserRole.SUPER_ADMIN ||
     user.role === UserRole.TENANT_ADMIN
   ) {
     return;

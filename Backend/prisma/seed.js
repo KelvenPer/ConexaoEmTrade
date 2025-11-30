@@ -1,5 +1,13 @@
 // Seed multi-tenant básico
-const { PrismaClient, TenantType, UserRole, AccessChannel } = require("@prisma/client");
+const {
+  PrismaClient,
+  TenantType,
+  UserRole,
+  AccessChannel,
+  UserSector,
+  ModuleCode,
+  PermissionLevel,
+} = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 
 const prisma = new PrismaClient();
@@ -19,6 +27,120 @@ async function upsertUserByEmailOrLogin({ email, login, data }) {
   }
 
   return prisma.tBLUSER.create({ data });
+}
+
+async function upsertPolicy(policy) {
+  const { role, accessChannel, sector = UserSector.GLOBAL, module, permission } = policy;
+  const sectorValue = sector || UserSector.GLOBAL;
+  await prisma.tBLACCESSPOLICY.upsert({
+    where: {
+      role_accessChannel_sector_module_permission: {
+        role,
+        accessChannel,
+        sector: sectorValue,
+        module,
+        permission,
+      },
+    },
+    update: {},
+    create: {
+      role,
+      accessChannel,
+      sector: sectorValue,
+      module,
+      permission,
+    },
+  });
+}
+
+async function seedPolicies() {
+  const basePolicies = [
+    // Plataforma (Kelven) - controla tudo
+    ...Object.values(ModuleCode).map((module) => ({
+      role: UserRole.PLATFORM_ADMIN,
+      accessChannel: AccessChannel.interno,
+      sector: UserSector.GLOBAL,
+      module,
+      permission: PermissionLevel.MANAGE,
+    })),
+    // Super admin do varejo - controla tudo dentro do tenant
+    ...Object.values(ModuleCode).map((module) => ({
+      role: UserRole.SUPER_ADMIN,
+      accessChannel: AccessChannel.varejo,
+      sector: UserSector.GLOBAL,
+      module,
+      permission: PermissionLevel.MANAGE,
+    })),
+    // Tenant admin (varejo) - controla apenas o seu setor e configuracoes basicas
+    {
+      role: UserRole.TENANT_ADMIN,
+      accessChannel: AccessChannel.varejo,
+      sector: UserSector.GLOBAL,
+      module: ModuleCode.DASHBOARD,
+      permission: PermissionLevel.VIEW,
+    },
+    {
+      role: UserRole.TENANT_ADMIN,
+      accessChannel: AccessChannel.varejo,
+      sector: UserSector.GLOBAL,
+      module: ModuleCode.CONFIG,
+      permission: PermissionLevel.MANAGE,
+    },
+    // Setores especificos para tenant admin
+    ...[
+      { sector: UserSector.MARKETING, module: ModuleCode.MARKETING },
+      { sector: UserSector.TRADE_MARKETING, module: ModuleCode.TRADE },
+      { sector: UserSector.COMERCIAL, module: ModuleCode.COMERCIAL },
+      { sector: UserSector.ANALITICA, module: ModuleCode.ANALYTICS },
+    ].map(({ sector, module }) => ({
+      role: UserRole.TENANT_ADMIN,
+      accessChannel: AccessChannel.varejo,
+      sector,
+      module,
+      permission: PermissionLevel.MANAGE,
+    })),
+    // Usuarios do varejo - visao somente do seu setor + dashboard
+    {
+      role: UserRole.USER,
+      accessChannel: AccessChannel.varejo,
+      sector: UserSector.GLOBAL,
+      module: ModuleCode.DASHBOARD,
+      permission: PermissionLevel.VIEW,
+    },
+    ...[
+      { sector: UserSector.MARKETING, module: ModuleCode.MARKETING },
+      { sector: UserSector.TRADE_MARKETING, module: ModuleCode.TRADE },
+      { sector: UserSector.COMERCIAL, module: ModuleCode.COMERCIAL },
+      { sector: UserSector.ANALITICA, module: ModuleCode.ANALYTICS },
+    ].map(({ sector, module }) => ({
+      role: UserRole.USER,
+      accessChannel: AccessChannel.varejo,
+      sector,
+      module,
+      permission: PermissionLevel.VIEW,
+    })),
+    // Industria: acesso somente leitura ao que estiver vinculado (contratos/execucao)
+    ...[
+      ModuleCode.DASHBOARD,
+      ModuleCode.TRADE,
+      ModuleCode.MARKETING,
+      ModuleCode.RETAIL_MEDIA,
+      ModuleCode.ECOMMERCE,
+      ModuleCode.ANALYTICS,
+      ModuleCode.CONTRACTS,
+    ].map((module) => ({
+      role: UserRole.USER,
+      accessChannel: AccessChannel.industria,
+      sector: UserSector.GLOBAL,
+      module,
+      permission: PermissionLevel.VIEW,
+    })),
+  ];
+
+  for (const policy of basePolicies) {
+    // eslint-disable-next-line no-await-in-loop
+    await upsertPolicy(policy);
+  }
 }
 
 async function main() {
@@ -109,6 +231,8 @@ async function main() {
     },
   });
 
+  await seedPolicies();
+
   // 5) Usuário plataforma (PLATFORM_ADMIN)
   const kelvenPasswordHash = await bcrypt.hash("senha-forte-kelven", 10);
   await upsertUserByEmailOrLogin({
@@ -122,11 +246,12 @@ async function main() {
       role: UserRole.PLATFORM_ADMIN,
       accessChannel: AccessChannel.interno,
       tenantId: platformTenant.id,
+      sector: UserSector.ANALITICA,
       status: "ativo",
     },
   });
 
-  // 6) Usuário admin Nestlé (TENANT_ADMIN)
+  // 6) Usuário indústria Nestlé (somente leitura)
   const nestleAdminHash = await bcrypt.hash("senha-nestle", 10);
   await upsertUserByEmailOrLogin({
     email: "trade.nestle@exemplo.com",
@@ -136,15 +261,16 @@ async function main() {
       email: "trade.nestle@exemplo.com",
       login: "nestle.admin",
       passwordHash: nestleAdminHash,
-      role: UserRole.TENANT_ADMIN,
+      role: UserRole.USER,
       accessChannel: AccessChannel.industria,
       tenantId: nestleTenant.id,
       supplierId: nestleSupplier.id,
+      sector: UserSector.TRADE_MARKETING,
       status: "ativo",
     },
   });
 
-  // 7) Usuário admin Varejo X (TENANT_ADMIN)
+  // 7) Usuário super admin Varejo X
   const varejoAdminHash = await bcrypt.hash("senha-varejo", 10);
   await upsertUserByEmailOrLogin({
     email: "trade@varejox.com",
@@ -154,10 +280,30 @@ async function main() {
       email: "trade@varejox.com",
       login: "varejo.admin",
       passwordHash: varejoAdminHash,
+      role: UserRole.SUPER_ADMIN,
+      accessChannel: AccessChannel.varejo,
+      tenantId: varejoTenant.id,
+      retailId: varejoX.id,
+      sector: UserSector.TRADE_MARKETING,
+      status: "ativo",
+    },
+  });
+
+  // 8) Usuário tenant_admin (varejo) - Marketing
+  const varejoMktHash = await bcrypt.hash("senha-marketing", 10);
+  await upsertUserByEmailOrLogin({
+    email: "marketing@varejox.com",
+    login: "varejo.marketing",
+    data: {
+      name: "Marketing Varejo X",
+      email: "marketing@varejox.com",
+      login: "varejo.marketing",
+      passwordHash: varejoMktHash,
       role: UserRole.TENANT_ADMIN,
       accessChannel: AccessChannel.varejo,
       tenantId: varejoTenant.id,
       retailId: varejoX.id,
+      sector: UserSector.MARKETING,
       status: "ativo",
     },
   });

@@ -14,6 +14,7 @@ function buildJwtPayload(user) {
     retailId: user.retailId ?? null,
     email: user.email,
     name: user.name,
+    sector: user.sector,
   };
 }
 

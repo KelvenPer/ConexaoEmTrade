@@ -23,12 +23,13 @@ async function scopedWhere(user, baseWhere = {}) {
 function assertCanManage(currentUser, targetTenantId) {
   if (
     currentUser.role !== UserRole.PLATFORM_ADMIN &&
-    currentUser.role !== UserRole.TENANT_ADMIN
+    currentUser.role !== UserRole.TENANT_ADMIN &&
+    currentUser.role !== UserRole.SUPER_ADMIN
   ) {
     throw new Error("Apenas admin pode gerenciar fornecedores.");
   }
   if (
-    currentUser.role === UserRole.TENANT_ADMIN &&
+    (currentUser.role === UserRole.TENANT_ADMIN || currentUser.role === UserRole.SUPER_ADMIN) &&
     Number(targetTenantId) !== Number(currentUser.tenantId)
   ) {
     throw new Error("Tenant invalido para este admin.");

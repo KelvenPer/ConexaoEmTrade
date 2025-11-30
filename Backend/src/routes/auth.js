@@ -2,16 +2,17 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { AccessChannel, UserRole } = require("@prisma/client");
+const { AccessChannel, UserRole, UserSector } = require("@prisma/client");
 const prisma = require("../prisma");
 const { buildJwtPayload } = require("../auth/jwtPayload");
 const { normalizeChannel } = require("../auth/multiTenantFilter");
 const { resolveTenantContext } = require("../auth/tenantContext");
 const { getUserFromRequest } = require("../auth/token");
+const { buildUserPermissions } = require("../auth/permissions");
 
 const router = express.Router();
 
-function formatUserResponse(user, token, tenant, supplier, retail, channel) {
+function formatUserResponse(user, token, tenant, supplier, retail, channel, permissions = []) {
   return {
     access_token: token,
     user: {
@@ -20,6 +21,8 @@ function formatUserResponse(user, token, tenant, supplier, retail, channel) {
       email: user.email,
       role: user.role,
       accessChannel: channel || user.accessChannel,
+      sector: user.sector,
+      permissions,
       tenant: tenant
         ? {
             id: tenant.id,
@@ -55,6 +58,8 @@ router.post("/novoCadastro", async (req, res) => {
       supplierId,
       retailId,
       tenantId,
+      sector,
+      role,
     } = req.body;
 
     if (!name || !email || !password || !login) {
@@ -73,6 +78,14 @@ router.post("/novoCadastro", async (req, res) => {
         message: "Ja existe um usuario cadastrado com esse e-mail.",
       });
     }
+
+    const resolvedRole = role && Object.values(UserRole).includes(role) ? role : UserRole.USER;
+    if (resolvedRole !== UserRole.USER) {
+      return res.status(403).json({ message: "Novo cadastro so permite criar usuarios comuns." });
+    }
+
+    const sectorValue =
+      sector && Object.values(UserSector).includes(sector) ? sector : UserSector.MARKETING;
 
     let tenantContext;
     try {
@@ -99,10 +112,12 @@ router.post("/novoCadastro", async (req, res) => {
         email,
         login,
         passwordHash,
+        role: resolvedRole,
         accessChannel: channel,
         tenantId: tenantContext.tenantId,
         supplierId: tenantContext.supplierId || null,
         retailId: tenantContext.retailId || null,
+        sector: sectorValue,
       },
       select: {
         id: true,
@@ -116,6 +131,7 @@ router.post("/novoCadastro", async (req, res) => {
         tenantId: true,
         supplierId: true,
         retailId: true,
+        sector: true,
         createdAt: true,
       },
     });
@@ -165,6 +181,7 @@ router.post("/login", async (req, res) => {
         supplierId: true,
         retailId: true,
         tenantId: true,
+        sector: true,
         passwordHash: true,
         tenant: true,
         supplier: true,
@@ -189,6 +206,11 @@ router.post("/login", async (req, res) => {
 
     const effectiveChannel = normalizeChannel(user.accessChannel || channel);
 
+    const permissions = await buildUserPermissions({
+      ...user,
+      accessChannel: effectiveChannel,
+    });
+
     const payload = buildJwtPayload({
       ...user,
       accessChannel: effectiveChannel,
@@ -202,7 +224,8 @@ router.post("/login", async (req, res) => {
       user.tenant,
       user.supplier,
       user.retail,
-      effectiveChannel
+      effectiveChannel,
+      permissions.client
     );
 
     return res.json(response);
@@ -263,13 +286,17 @@ router.post("/switch-tenant", async (req, res) => {
       return res.status(404).json({ message: "Usuario nao encontrado." });
     }
 
-    const payload = buildJwtPayload({
+    const updatedUser = {
       ...authUser,
       tenantId: tenant.id,
       supplierId: supplier ? supplier.id : null,
       retailId: retail ? retail.id : null,
       accessChannel: derivedChannel,
-    });
+    };
+
+    const permissions = await buildUserPermissions(updatedUser);
+
+    const payload = buildJwtPayload(updatedUser);
 
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "8h" });
 
@@ -278,12 +305,14 @@ router.post("/switch-tenant", async (req, res) => {
         ...userRecord,
         role: userRecord.role,
         accessChannel: derivedChannel,
+        sector: userRecord.sector,
       },
       token,
       tenant,
       supplier,
       retail,
-      derivedChannel
+      derivedChannel,
+      permissions.client
     );
 
     return res.json(response);

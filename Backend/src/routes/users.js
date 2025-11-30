@@ -1,13 +1,26 @@
 // backend/src/routes/users.js
 const express = require("express");
 const bcrypt = require("bcryptjs");
-const { AccessChannel, UserRole } = require("@prisma/client");
+const { AccessChannel, UserRole, UserSector } = require("@prisma/client");
 const prisma = require("../prisma");
 const { resolveTenantContext } = require("../auth/tenantContext");
 const { normalizeChannel, resolveScope, applyScopeToWhere } = require("../auth/multiTenantFilter");
 const { requireAuthUser } = require("../auth/requireAuth");
+const { hasPermission, PermissionLevel, ModuleCode } = require("../auth/permissions");
 
 const router = express.Router();
+
+const PLATFORM_ADMIN_ALLOWLIST = (process.env.PLATFORM_ADMINS || "kelven.silva")
+  .split(",")
+  .map((v) => v.trim().toLowerCase())
+  .filter(Boolean);
+
+function isPlatformOwner(user) {
+  if (!user) return false;
+  const compare = (value) =>
+    value && PLATFORM_ADMIN_ALLOWLIST.includes(String(value).toLowerCase());
+  return user.role === UserRole.PLATFORM_ADMIN && (compare(user.login) || compare(user.email));
+}
 
 async function scopedWhere(user, baseWhere = {}) {
   const scope = await resolveScope(user);
@@ -23,13 +36,22 @@ function requireAuth(req, res) {
   return requireAuthUser(req, res);
 }
 
+function normalizeSectorValue(value) {
+  if (!value) return UserSector.MARKETING;
+  return Object.values(UserSector).includes(value) ? value : UserSector.MARKETING;
+}
+
 function assertCanManageUsers(currentUser) {
-  if (
-    currentUser.role !== UserRole.PLATFORM_ADMIN &&
-    currentUser.role !== UserRole.TENANT_ADMIN
-  ) {
-    throw new Error("Apenas PLATFORM_ADMIN ou TENANT_ADMIN podem gerenciar usuarios.");
+  if (currentUser.role === UserRole.PLATFORM_ADMIN || currentUser.role === UserRole.SUPER_ADMIN) {
+    return;
   }
+  if (
+    currentUser.role === UserRole.TENANT_ADMIN &&
+    hasPermission(currentUser.permissionRecords || [], ModuleCode.CONFIG, PermissionLevel.MANAGE)
+  ) {
+    return;
+  }
+  throw new Error("Apenas PLATFORM_ADMIN, SUPER_ADMIN ou TENANT_ADMIN com permissao podem gerenciar usuarios.");
 }
 
 /**
@@ -58,6 +80,7 @@ router.get("/", async (_req, res) => {
         supplierId: true,
         retailId: true,
         tenantId: true,
+        sector: true,
         createdAt: true,
       },
     });
@@ -93,6 +116,7 @@ router.get("/me", async (req, res) => {
         supplierId: true,
         retailId: true,
         tenantId: true,
+        sector: true,
         createdAt: true,
       },
     });
@@ -101,7 +125,10 @@ router.get("/me", async (req, res) => {
       return res.status(404).json({ message: "Usuario nao encontrado." });
     }
 
-    res.json(usuario);
+    res.json({
+      ...usuario,
+      permissions: decoded.permissions || [],
+    });
   } catch (error) {
     console.error("Erro ao buscar usuario logado:", error);
     res.status(500).json({ message: "Erro ao buscar usuario logado." });
@@ -141,6 +168,7 @@ router.put("/me/foto", async (req, res) => {
         supplierId: true,
         retailId: true,
         tenantId: true,
+        sector: true,
         createdAt: true,
       },
     });
@@ -233,6 +261,7 @@ router.get("/:id", async (req, res) => {
         supplierId: true,
         retailId: true,
         tenantId: true,
+        sector: true,
         createdAt: true,
       },
     });
@@ -270,6 +299,7 @@ router.post("/", async (req, res) => {
       supplierId,
       retailId,
       tenantId,
+      sector,
     } = req.body;
 
     const parsedTenantId = tenantId === "" ? undefined : tenantId;
@@ -300,6 +330,9 @@ router.post("/", async (req, res) => {
         .json({ message: "Ja existe um usuario com este login." });
     }
 
+    const parsedSector = normalizeSectorValue(sector);
+    const requestedRole = role || UserRole.USER;
+
     // Regras de tenant: PLATFORM_ADMIN cria qualquer tenant; TENANT_ADMIN apenas no seu tenant/canal.
     // Se for super admin e nao informar tenant/supplier/retail, usamos o tenant atual dele como fallback.
     const fallbackTenantForPlatform =
@@ -311,6 +344,35 @@ router.post("/", async (req, res) => {
     const channel = normalizeChannel(
       accessChannel || (parsedRetailId ? AccessChannel.varejo : AccessChannel.industria)
     );
+
+    if (channel === AccessChannel.industria && requestedRole !== UserRole.USER) {
+      return res
+        .status(403)
+        .json({ message: "Usuarios de industria sao apenas visualizacao (role USER)." });
+    }
+
+    if (requestedRole === UserRole.PLATFORM_ADMIN && !isPlatformOwner(currentUser)) {
+      return res
+        .status(403)
+        .json({ message: "Perfil PLATFORM_ADMIN reservado ao owner da plataforma." });
+    }
+
+    if (requestedRole === UserRole.PLATFORM_ADMIN) {
+      const normalizedLogin = String(login || "").toLowerCase();
+      const normalizedEmail = String(email || "").toLowerCase();
+      if (
+        !PLATFORM_ADMIN_ALLOWLIST.includes(normalizedLogin) &&
+        !PLATFORM_ADMIN_ALLOWLIST.includes(normalizedEmail)
+      ) {
+        return res
+          .status(400)
+          .json({ message: "Nao e permitido criar novos PLATFORM_ADMIN fora da plataforma." });
+      }
+    }
+
+    if (requestedRole === UserRole.SUPER_ADMIN && channel !== AccessChannel.varejo) {
+      return res.status(400).json({ message: "SUPER_ADMIN deve atuar com canal varejo." });
+    }
 
     if (currentUser.role === UserRole.TENANT_ADMIN) {
       if (Number(targetTenant) !== Number(currentUser.tenantId)) {
@@ -326,6 +388,24 @@ router.post("/", async (req, res) => {
           return res.status(403).json({ message: "retailId diferente do admin atual." });
         }
       }
+    }
+
+    if (
+      currentUser.role === UserRole.SUPER_ADMIN &&
+      currentUser.tenantId &&
+      Number(targetTenant) !== Number(currentUser.tenantId)
+    ) {
+      return res
+        .status(403)
+        .json({ message: "SUPER_ADMIN so pode editar usuarios do proprio tenant." });
+    }
+
+    if (
+      currentUser.role === UserRole.SUPER_ADMIN &&
+      currentUser.tenantId &&
+      Number(targetTenant) !== Number(currentUser.tenantId)
+    ) {
+      return res.status(403).json({ message: "SUPER_ADMIN so pode criar usuarios no proprio tenant." });
     }
 
     let tenantContext;
@@ -349,13 +429,14 @@ router.post("/", async (req, res) => {
         email,
         login,
         passwordHash,
-        role: role || "USER",
+        role: requestedRole,
         status: status || "ativo",
         photoUrl: photoUrl || null,
         accessChannel: channel,
         tenantId: tenantContext.tenantId,
         supplierId: tenantContext.supplierId || null,
         retailId: tenantContext.retailId || null,
+        sector: parsedSector,
       },
       select: {
         id: true,
@@ -369,6 +450,7 @@ router.post("/", async (req, res) => {
         supplierId: true,
         retailId: true,
         tenantId: true,
+        sector: true,
         createdAt: true,
       },
     });
@@ -409,6 +491,7 @@ router.put("/:id", async (req, res) => {
       supplierId,
       retailId,
       tenantId,
+      sector,
     } = req.body;
 
     // Correção: Define e converte os IDs do corpo da requisição para corrigir o ReferenceError.
@@ -468,6 +551,9 @@ router.put("/:id", async (req, res) => {
       passwordHash = await bcrypt.hash(password, salt);
     }
 
+    const targetRole = role || usuarioAtual.role;
+    const parsedSector = sector !== undefined ? normalizeSectorValue(sector) : usuarioAtual.sector;
+
     // Para PLATFORM_ADMIN, permitimos que o tenant seja inferido pelo supplier/retail se não for enviado.
     // Para TENANT_ADMIN/USER, mantemos o tenant atual se não vier no payload.
     const effectiveSupplierId = parsedSupplierId !== undefined ? parsedSupplierId : usuarioAtual.supplierId;
@@ -483,6 +569,33 @@ router.put("/:id", async (req, res) => {
     const channel = normalizeChannel(
       accessChannel ?? usuarioAtual.accessChannel ?? AccessChannel.industria
     );
+
+    if (channel === AccessChannel.industria && targetRole !== UserRole.USER) {
+      return res.status(403).json({ message: "Usuarios de industria sao apenas visualizacao (role USER)." });
+    }
+
+    if (targetRole === UserRole.PLATFORM_ADMIN && !isPlatformOwner(currentUser)) {
+      return res
+        .status(403)
+        .json({ message: "Perfil PLATFORM_ADMIN reservado ao owner da plataforma." });
+    }
+
+    if (targetRole === UserRole.PLATFORM_ADMIN) {
+      const normalizedLogin = String(login ?? usuarioAtual.login ?? "").toLowerCase();
+      const normalizedEmail = String(email ?? usuarioAtual.email ?? "").toLowerCase();
+      if (
+        !PLATFORM_ADMIN_ALLOWLIST.includes(normalizedLogin) &&
+        !PLATFORM_ADMIN_ALLOWLIST.includes(normalizedEmail)
+      ) {
+        return res
+          .status(400)
+          .json({ message: "Nao e permitido promover usuarios a PLATFORM_ADMIN." });
+      }
+    }
+
+    if (targetRole === UserRole.SUPER_ADMIN && channel !== AccessChannel.varejo) {
+      return res.status(400).json({ message: "SUPER_ADMIN deve atuar com canal varejo." });
+    }
 
     if (currentUser.role === UserRole.TENANT_ADMIN) {
       if (Number(targetTenant) !== Number(currentUser.tenantId)) {
@@ -518,7 +631,7 @@ router.put("/:id", async (req, res) => {
         name: name ?? usuarioAtual.name,
         email: email ?? usuarioAtual.email,
         login: login ?? usuarioAtual.login,
-        role: role ?? usuarioAtual.role,
+        role: targetRole,
         status: status ?? usuarioAtual.status,
         photoUrl: photoUrl ?? usuarioAtual.photoUrl,
         accessChannel: channel,
@@ -527,6 +640,7 @@ router.put("/:id", async (req, res) => {
           supplierId !== undefined ? tenantContext.supplierId : usuarioAtual.supplierId,
         retailId:
           retailId !== undefined ? tenantContext.retailId : usuarioAtual.retailId,
+        sector: parsedSector,
         passwordHash,
       },
       select: {
@@ -541,6 +655,7 @@ router.put("/:id", async (req, res) => {
         supplierId: true,
         retailId: true,
         tenantId: true,
+        sector: true,
         createdAt: true,
       },
     });

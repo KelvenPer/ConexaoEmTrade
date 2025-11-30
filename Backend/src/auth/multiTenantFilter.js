@@ -38,6 +38,29 @@ async function resolveScope(user) {
     return { isPlatformAdmin: true, tenantId: null, supplierIds: [], retailIds: [] };
   }
 
+  if (user.role === UserRole.SUPER_ADMIN) {
+    if (!tenantId) {
+      return { denyAll: true };
+    }
+    const [suppliers, retails] = await Promise.all([
+      prisma.TBLFORN.findMany({
+        where: { tenantId },
+        select: { id: true },
+      }),
+      prisma.TBLRETAIL.findMany({
+        where: { tenantId },
+        select: { id: true },
+      }),
+    ]);
+
+    return {
+      tenantId,
+      supplierIds: suppliers.map((s) => s.id),
+      retailIds: retails.map((r) => r.id),
+      isPlatformAdmin: false,
+    };
+  }
+
   // Tenant admin sem supplier/retail: enxerga todo o tenant
   if (user.role === UserRole.TENANT_ADMIN && !user.supplierId && !user.retailId) {
     const [suppliers, retails] = await Promise.all([

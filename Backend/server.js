@@ -10,6 +10,7 @@ const jbpRoutes = require("./src/routes/jbp");
 const campanhasRoutes = require("./src/routes/campanhas");
 const produtosRoutes = require("./src/routes/produtos");
 const retailRoutes = require("./src/routes/retail");
+const initiativesRoutes = require("./src/routes/initiatives");
 
 
 
@@ -35,6 +36,7 @@ app.use("/api/jbp", jbpRoutes);
 app.use("/api/campanhas", campanhasRoutes);
 app.use("/api/produtos", produtosRoutes);
 app.use("/api/varejos", retailRoutes);
+app.use("/api/iniciativas", initiativesRoutes);
 
 const PORT = process.env.PORT || 8000;
 

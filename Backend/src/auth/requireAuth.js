@@ -1,6 +1,7 @@
 const prisma = require("../prisma");
 const { getUserFromRequest } = require("./token");
 const { normalizeChannel } = require("./multiTenantFilter");
+const { buildUserPermissions } = require("./permissions");
 
 async function requireAuthUser(req, res) {
   const decoded = getUserFromRequest(req);
@@ -23,6 +24,7 @@ async function requireAuthUser(req, res) {
       tenantId: true,
       supplierId: true,
       retailId: true,
+      sector: true,
     },
   });
 
@@ -31,9 +33,17 @@ async function requireAuthUser(req, res) {
     return null;
   }
 
+  const accessChannel = normalizeChannel(user.accessChannel || decoded.accessChannel);
+  const { policies, client } = await buildUserPermissions({
+    ...user,
+    accessChannel,
+  });
+
   return {
     ...user,
-    accessChannel: normalizeChannel(user.accessChannel || decoded.accessChannel),
+    accessChannel,
+    permissions: client,
+    permissionRecords: policies,
   };
 }
 

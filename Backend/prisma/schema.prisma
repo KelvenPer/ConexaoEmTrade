@@ -19,6 +19,7 @@ enum TenantType {
 
 enum UserRole {
   PLATFORM_ADMIN   // dono da plataforma (você)
+  SUPER_ADMIN      // admin mestre do tenant (ex.: varejo)
   TENANT_ADMIN     // admin dentro do tenant (Nestlé, Varejo X)
   USER             // usuário comum
 }
@@ -27,6 +28,39 @@ enum AccessChannel {
   industria
   varejo
   interno
+}
+
+enum UserSector {
+  GLOBAL
+  MARKETING
+  TRADE_MARKETING
+  COMERCIAL
+  ANALITICA
+}
+
+enum ModuleCode {
+  DASHBOARD
+  MARKETING
+  TRADE
+  RETAIL_MEDIA
+  ECOMMERCE
+  COMERCIAL
+  ANALYTICS
+  CONFIG
+  CONTRACTS
+}
+
+enum PermissionLevel {
+  VIEW
+  MANAGE
+}
+
+enum InitiativeType {
+  MARKETING
+  TRADE
+  RETAIL_MEDIA
+  ECOMMERCE
+  COMERCIAL
 }
 
 // =========================
@@ -73,6 +107,7 @@ model TBLFORN {
   users         TBLUSER[]
   partnerships  TBLPARTNERSHIP[]
   products      TBLPROD[]
+  initiatives   TBLINITIATIVE[]
 }
 
 // =========================
@@ -99,6 +134,7 @@ model TBLRETAIL {
   vendasResumos TBLVENDASRESUMO[]
   users         TBLUSER[]
   partnerships  TBLPARTNERSHIP[]
+  initiatives   TBLINITIATIVE[]
 }
 
 // =========================
@@ -143,6 +179,7 @@ model TBLATV {
   campanhaItens    TBLCAMPANHAITEM[]
   execTarefas      TBLEXECTAREFA[]
   retailMediaItens TBLRETAILMEDIA_ITEM[]
+  initiativeAtivos TBLINITIATIVE_ASSET[]
 }
 
 // =========================
@@ -168,6 +205,7 @@ model TBLPROD {
   jbpItens         TBLJBPITEM[]
   campanhaItens    TBLCAMPANHAITEM[]
   retailMediaItens TBLRETAILMEDIA_ITEM[]
+  initiativeProdutos TBLINITIATIVE_PRODUCT[]
 
   @@unique([tenantId, code])
 }
@@ -201,6 +239,7 @@ model TBLJBP {
   execPlanos    TBLEXECPLANO[]
   retailPlanos  TBLRETAILMEDIA_PLANO[]
   vendasResumos TBLVENDASRESUMO[]
+  initiatives   TBLINITIATIVE[]
 }
 
 model TBLJBPITEM {
@@ -226,6 +265,58 @@ model TBLJBPITEM {
   campanhaItens    TBLCAMPANHAITEM[]
   execTarefas      TBLEXECTAREFA[]
   retailMediaItens TBLRETAILMEDIA_ITEM[]
+}
+
+// =========================
+// Iniciativas (Trade/Marketing/Retail Media/E-commerce/Comercial)
+// =========================
+
+model TBLINITIATIVE {
+  id           Int             @id @default(autoincrement())
+  jbpId        Int?
+  supplierId   Int?
+  retailId     Int?
+  type         InitiativeType
+  name         String
+  objective    String?
+  channel      String?
+  startDate    DateTime?
+  endDate      DateTime?
+  status       String          @default("planejada")
+  totalBudget  Float?
+  notes        String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  jbp      TBLJBP?    @relation(fields: [jbpId], references: [id])
+  supplier TBLFORN?   @relation(fields: [supplierId], references: [id])
+  retail   TBLRETAIL? @relation(fields: [retailId], references: [id])
+  produtos TBLINITIATIVE_PRODUCT[]
+  ativos   TBLINITIATIVE_ASSET[]
+}
+
+model TBLINITIATIVE_PRODUCT {
+  id             Int           @id @default(autoincrement())
+  initiativeId   Int
+  productId      Int
+  goalMetric     String?
+  goalValue      Float?
+  allocatedValue Float?
+  notes          String?
+
+  initiative TBLINITIATIVE @relation(fields: [initiativeId], references: [id])
+  product     TBLPROD      @relation(fields: [productId], references: [id])
+}
+
+model TBLINITIATIVE_ASSET {
+  id             Int           @id @default(autoincrement())
+  initiativeId   Int
+  assetId        Int
+  plannedValue   Float?
+  notes          String?
+
+  initiative TBLINITIATIVE @relation(fields: [initiativeId], references: [id])
+  asset       TBLATV       @relation(fields: [assetId], references: [id])
 }
 
 // =========================
@@ -399,8 +490,23 @@ model TBLUSER {
   tenantId      Int
   supplierId    Int?
   retailId      Int?
+  sector        UserSector    @default(MARKETING)
 
   tenant   TBLTENANT  @relation(fields: [tenantId], references: [id])
   supplier TBLFORN?   @relation(fields: [supplierId], references: [id])
   retail   TBLRETAIL? @relation(fields: [retailId], references: [id])
+}
+
+// Politicas padrao de permissao por combinacao Role / Canal / Setor
+model TBLACCESSPOLICY {
+  id            Int             @id @default(autoincrement())
+  role          UserRole
+  accessChannel AccessChannel
+  sector        UserSector      @default(GLOBAL)
+  module        ModuleCode
+  permission    PermissionLevel
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@unique([role, accessChannel, sector, module, permission])
 }

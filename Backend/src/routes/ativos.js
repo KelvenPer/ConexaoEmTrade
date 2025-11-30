@@ -13,7 +13,8 @@ async function requireAuth(req, res) {
 function assertCanManage(currentUser) {
   if (
     currentUser.role !== UserRole.PLATFORM_ADMIN &&
-    currentUser.role !== UserRole.TENANT_ADMIN
+    currentUser.role !== UserRole.TENANT_ADMIN &&
+    currentUser.role !== UserRole.SUPER_ADMIN
   ) {
     throw new Error("Apenas admin pode gerenciar ativos.");
   }

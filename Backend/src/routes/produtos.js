@@ -40,7 +40,11 @@ async function scopedWhere(user, baseWhere = {}) {
 }
 
 function assertCanWrite(user) {
-  if (user.role !== UserRole.PLATFORM_ADMIN && user.role !== UserRole.TENANT_ADMIN) {
+  if (
+    user.role !== UserRole.PLATFORM_ADMIN &&
+    user.role !== UserRole.TENANT_ADMIN &&
+    user.role !== UserRole.SUPER_ADMIN
+  ) {
     throw new Error("Apenas admin pode gerenciar produtos.");
   }
 }

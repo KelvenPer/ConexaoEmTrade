@@ -7,6 +7,14 @@ type UserProfile = {
   email: string;
   login: string;
   role: string;
+  sector?: string;
+};
+
+const sectorLabels: Record<string, string> = {
+  MARKETING: "Marketing",
+  TRADE_MARKETING: "Trade marketing",
+  COMERCIAL: "Comercial",
+  ANALITICA: "Área analítica",
 };
 
 export default function PerfilPage() {
@@ -18,6 +26,7 @@ export default function PerfilPage() {
         email: "",
         login: "",
         role: "user",
+        sector: "",
       };
     }
 
@@ -30,6 +39,7 @@ export default function PerfilPage() {
           email: parsed?.email || "",
           login: parsed?.login || "",
           role: parsed?.role || "user",
+          sector: parsed?.sector || "",
         };
       } catch {
         // segue com defaults abaixo
@@ -41,6 +51,7 @@ export default function PerfilPage() {
       email: "",
       login: "",
       role: "user",
+      sector: "",
     };
   });
   const [statusMsg, setStatusMsg] = useState("");
@@ -66,6 +77,7 @@ export default function PerfilPage() {
           email: data?.email || "",
           login: data?.login || "",
           role: data?.role || "user",
+          sector: data?.sector || "",
         });
         localStorage.setItem("conexao_trade_user", JSON.stringify(data));
         setStatusMsg("");
@@ -114,6 +126,11 @@ export default function PerfilPage() {
         </Field>
         <Field label="Perfil de acesso">
           <div className="panel-input panel-input--solid">{user.role}</div>
+        </Field>
+        <Field label="Setor">
+          <div className="panel-input panel-input--solid">
+            {sectorLabels[user.sector || ""] || user.sector || "-"}
+          </div>
         </Field>
       </div>
     </div>

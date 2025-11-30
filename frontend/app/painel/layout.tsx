@@ -12,6 +12,12 @@ import {
   Megaphone,
   CalendarDays,
   LineChart,
+  Briefcase,
+  BarChart3,
+  Radio,
+  ShoppingBag,
+  Store,
+  Target,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -20,6 +26,17 @@ type LayoutProps = {
   children: ReactNode;
 };
 
+type Permission = {
+  module: string;
+  level: string;
+};
+
+const SECTOR_MODULE_MAP: Record<string, string> = {
+  MARKETING: "marketing",
+  TRADE_MARKETING: "trade",
+  COMERCIAL: "comercial",
+  ANALITICA: "analytics",
+};
 type ThemeOption = "light" | "dark";
 
 export default function PainelLayout({ children }: LayoutProps) {
@@ -35,6 +52,8 @@ export default function PainelLayout({ children }: LayoutProps) {
   const [tenantId, setTenantId] = useState<number | null>(null);
   const [supplierId, setSupplierId] = useState<number | null>(null);
   const [retailId, setRetailId] = useState<number | null>(null);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [userSector, setUserSector] = useState<string | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -52,10 +71,43 @@ export default function PainelLayout({ children }: LayoutProps) {
     []
   );
   const isPlatformAdmin = userRole === "PLATFORM_ADMIN";
+  const isSuperAdmin = userRole === "SUPER_ADMIN";
   const isTenantAdmin = userRole === "TENANT_ADMIN";
-  const canManageConfig = isPlatformAdmin || isTenantAdmin;
+  const canManageConfig =
+    isPlatformAdmin ||
+    isSuperAdmin ||
+    (!permissions.length && isTenantAdmin) ||
+    permissions.some(
+      (p) =>
+        p.module?.toLowerCase() === "config" &&
+        (p.level?.toLowerCase() === "manage" || p.level?.toLowerCase() === "view")
+    );
   const channelLabel =
     accessChannel === "varejo" ? "Varejo" : accessChannel === "interno" ? "Interno" : "Industria";
+
+  const canView = useCallback(
+    (module: string) => {
+      const target = module ? module.toLowerCase() : "";
+      if (!target) return false;
+      if (isPlatformAdmin || isSuperAdmin) return true;
+
+      const hasPolicy = permissions.some(
+        (p) =>
+          p.module?.toLowerCase() === target &&
+          (p.level?.toLowerCase() === "view" || p.level?.toLowerCase() === "manage")
+      );
+      if (hasPolicy) return true;
+
+      if (!permissions.length) {
+        const sectorModule = userSector ? SECTOR_MODULE_MAP[userSector] : null;
+        if (target === "dashboard") return true;
+        if (sectorModule && sectorModule === target) return true;
+        if (target === "config" && (isTenantAdmin || isSuperAdmin)) return true;
+      }
+      return false;
+    },
+    [permissions, isPlatformAdmin, isSuperAdmin, userSector, isTenantAdmin]
+  );
 
   const persistUser = useCallback((data: Record<string, unknown>) => {
     if (typeof window === "undefined") return;
@@ -87,6 +139,8 @@ export default function PainelLayout({ children }: LayoutProps) {
     if (data?.tenantId !== undefined) setTenantId(data.tenantId ? Number(data.tenantId) : null);
     if (data?.supplierId !== undefined) setSupplierId(data.supplierId ? Number(data.supplierId) : null);
     if (data?.retailId !== undefined) setRetailId(data.retailId ? Number(data.retailId) : null);
+    if (data?.sector) setUserSector(String(data.sector));
+    if (Array.isArray(data?.permissions)) setPermissions(data.permissions as Permission[]);
     if (data?.photoUrl) {
       setUserPhoto(String(data.photoUrl));
       localStorage.setItem("conexao_trade_user_photo", String(data.photoUrl));
@@ -122,6 +176,14 @@ export default function PainelLayout({ children }: LayoutProps) {
     applyTheme(nextTheme);
   };
 
+  const showDashboard = canView("dashboard");
+  const showTrade = canView("trade");
+  const showRetailMedia = canView("retail_media");
+  const showEcommerce = canView("ecommerce");
+  const showMarketing = canView("marketing");
+  const showComercial = canView("comercial");
+  const showAnalytics = canView("analytics");
+
   useEffect(() => {
     const storedUser = typeof window !== "undefined" ? localStorage.getItem("conexao_trade_user") : null;
     if (storedUser) {
@@ -135,6 +197,8 @@ export default function PainelLayout({ children }: LayoutProps) {
         if (parsed?.tenantId !== undefined) setTenantId(parsed.tenantId ? Number(parsed.tenantId) : null);
         if (parsed?.supplierId !== undefined) setSupplierId(parsed.supplierId ? Number(parsed.supplierId) : null);
         if (parsed?.retailId !== undefined) setRetailId(parsed.retailId ? Number(parsed.retailId) : null);
+        if (parsed?.sector) setUserSector(String(parsed.sector));
+        if (Array.isArray(parsed?.permissions)) setPermissions(parsed.permissions as Permission[]);
         if (parsed?.photoUrl) setUserPhoto(String(parsed.photoUrl));
       } catch {
         // ignore parse issues
@@ -207,49 +271,143 @@ export default function PainelLayout({ children }: LayoutProps) {
         </div>
 
         <nav className="app-shell__sidebar-nav">
-          <NavGroup title="Principal">
-            <NavItem
-              href="/painel"
-              pathname={pathname}
-              icon={<LayoutDashboard size={16} />}
-            >
-              Dashboard Geral
-            </NavItem>
-          </NavGroup>
+          {showDashboard && (
+            <NavGroup title="Principal">
+              <NavItem
+                href="/painel"
+                pathname={pathname}
+                icon={<LayoutDashboard size={16} />}
+              >
+                Dashboard Geral
+              </NavItem>
+            </NavGroup>
+          )}
 
-          <NavGroup title="Trade Marketing">
-            <NavItem
-              href="/painel/trade/jbp-jvc"
-              pathname={pathname}
-              icon={<Boxes size={16} />}
-            >
-              JBP &amp; JVC
-            </NavItem>
-          </NavGroup>
+          {showTrade && (
+            <NavGroup title="Trade Marketing">
+              <NavItem
+                href="/painel/trade/jbp-jvc"
+                pathname={pathname}
+                icon={<Boxes size={16} />}
+              >
+                JBP &amp; JVC
+              </NavItem>
+            </NavGroup>
+          )}
 
-          <NavGroup title="Marketing">
-            <NavItem
-              href="/painel/marketing/calendario"
-              pathname={pathname}
-              icon={<CalendarDays size={16} />}
-            >
-              Calendario de campanhas
-            </NavItem>
-            <NavItem
-              href="/painel/marketing/campanhas"
-              pathname={pathname}
-              icon={<Megaphone size={16} />}
-            >
-              Campanhas &amp; conteudo
-            </NavItem>
-            <NavItem
-              href="/painel/marketing/resultados"
-              pathname={pathname}
-              icon={<LineChart size={16} />}
-            >
-              Resultados de campanha
-            </NavItem>
-          </NavGroup>
+          {showRetailMedia && (
+            <NavGroup title="Retail Media">
+              <NavItem
+                href="/painel/trade/retail-media"
+                pathname={pathname}
+                icon={<Radio size={16} />}
+              >
+                Planos de Retail Media
+              </NavItem>
+            </NavGroup>
+          )}
+
+          {showEcommerce && (
+            <NavGroup title="E-commerce">
+              <NavItem
+                href="/painel/ecommerce"
+                pathname={pathname}
+                icon={<ShoppingBag size={16} />}
+              >
+                Operacoes digitais
+              </NavItem>
+            </NavGroup>
+          )}
+
+          {showMarketing && (
+            <NavGroup title="Marketing">
+              <NavItem
+                href="/painel/marketing/calendario"
+                pathname={pathname}
+                icon={<CalendarDays size={16} />}
+              >
+                Calendario de campanhas
+              </NavItem>
+              <NavItem
+                href="/painel/marketing/campanhas"
+                pathname={pathname}
+                icon={<Megaphone size={16} />}
+              >
+                Campanhas &amp; conteudo
+              </NavItem>
+              <NavItem
+                href="/painel/marketing/resultados"
+                pathname={pathname}
+                icon={<LineChart size={16} />}
+              >
+                Resultados de campanha
+              </NavItem>
+            </NavGroup>
+          )}
+
+          {showComercial && (
+            <NavGroup title="Comercial">
+              <NavItem
+                href="/painel/comercial/pdv"
+                pathname={pathname}
+                icon={<Store size={16} />}
+              >
+                PDV
+              </NavItem>
+              <NavItem
+                href="/painel/comercial/venda-online"
+                pathname={pathname}
+                icon={<ShoppingBag size={16} />}
+              >
+                Venda online
+              </NavItem>
+              <NavItem
+                href="/painel/comercial/orcamento"
+                pathname={pathname}
+                icon={<Briefcase size={16} />}
+              >
+                Orcamento
+              </NavItem>
+              <NavItem
+                href="/painel/comercial/metas"
+                pathname={pathname}
+                icon={<Target size={16} />}
+              >
+                Metas
+              </NavItem>
+            </NavGroup>
+          )}
+
+          {showAnalytics && (
+            <NavGroup title="Dados & BI">
+              <NavItem
+                href="/painel/dados/sql-lab"
+                pathname={pathname}
+                icon={<BarChart3 size={16} />}
+              >
+                SQL Lab
+              </NavItem>
+              <NavItem
+                href="/painel/dados/bi"
+                pathname={pathname}
+                icon={<LineChart size={16} />}
+              >
+                Analytics &amp; BI
+              </NavItem>
+            </NavGroup>
+          )}
+
+          {showAnalytics && (
+            <NavGroup title="Área Analítica">
+              <NavItem
+                href="/painel/analitica"
+                pathname={pathname}
+                icon={<BarChart3 size={16} />}
+              >
+                Dados &amp; insights
+              </NavItem>
+            </NavGroup>
+          )}
 
           {canManageConfig && (
             <NavGroup title="Configuracoes">

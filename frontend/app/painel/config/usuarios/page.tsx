@@ -13,12 +13,26 @@ type Usuario = {
   photoUrl?: string | null;
   accessChannel?: string | null;
   supplierId?: number | null;
+   sector?: string | null;
   createdAt?: string;
 };
 
 type Fornecedor = {
   id: number;
   name: string;
+};
+
+const sectorOptions = [
+  { value: "MARKETING", label: "Marketing" },
+  { value: "TRADE_MARKETING", label: "Trade marketing" },
+  { value: "COMERCIAL", label: "Comercial" },
+  { value: "ANALITICA", label: "Área analítica" },
+];
+
+const sectorLabel = (value?: string | null) => {
+  if (!value) return "-";
+  const found = sectorOptions.find((opt) => opt.value === value);
+  return found?.label || value;
 };
 
 export default function ConfigUsuariosPage() {
@@ -44,6 +58,7 @@ export default function ConfigUsuariosPage() {
     status: "ativo",
     accessChannel: "industria",
     supplierId: "",
+    sector: "MARKETING",
   });
 
   const supplierMap = useMemo(() => {
@@ -51,6 +66,9 @@ export default function ConfigUsuariosPage() {
     fornecedores.forEach((f) => map.set(f.id, f.name));
     return map;
   }, [fornecedores]);
+
+  const isIndustryChannel = form.accessChannel === "industria";
+  const isVarejoChannel = form.accessChannel === "varejo";
 
   function getTokenOrFail() {
     const token =
@@ -119,16 +137,47 @@ export default function ConfigUsuariosPage() {
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
-    if (name === "role" && value === "PLATFORM_ADMIN") {
-      setForm((prev) => ({
-        ...prev,
-        role: value,
-        accessChannel: "interno", // super admin usa canal interno
-        supplierId: "",
-      }));
-      return;
+    if (name === "role") {
+      if (value === "PLATFORM_ADMIN") {
+        setForm((prev) => ({
+          ...prev,
+          role: value,
+          accessChannel: "interno",
+          supplierId: "",
+        }));
+        return;
+      }
+      if (value === "SUPER_ADMIN") {
+        setForm((prev) => ({
+          ...prev,
+          role: value,
+          accessChannel: "varejo",
+          supplierId: "",
+        }));
+        return;
+      }
+      if (value === "TENANT_ADMIN" && form.accessChannel === "industria") {
+        setForm((prev) => ({
+          ...prev,
+          role: value,
+          accessChannel: "varejo",
+          supplierId: "",
+        }));
+        return;
+      }
     }
-    if (name === "accessChannel" && value !== "industria") {
+
+    if (name === "accessChannel") {
+      if (value === "industria") {
+        setForm((prev) => ({
+          ...prev,
+          accessChannel: value,
+          role: "USER",
+          supplierId: "",
+          sector: prev.sector || "MARKETING",
+        }));
+        return;
+      }
       setForm((prev) => ({
         ...prev,
         accessChannel: value,
@@ -154,6 +203,7 @@ export default function ConfigUsuariosPage() {
       status: "ativo",
       accessChannel: "industria",
       supplierId: "",
+      sector: "MARKETING",
     });
     setErrorMsg("");
     setSuccessMsg("");
@@ -170,6 +220,7 @@ export default function ConfigUsuariosPage() {
       status: usuario.status || "ativo",
       accessChannel: usuario.accessChannel || "industria",
       supplierId: usuario.supplierId != null ? String(usuario.supplierId) : "",
+      sector: usuario.sector || "MARKETING",
     });
     setErrorMsg("");
     setSuccessMsg("");
@@ -182,6 +233,11 @@ export default function ConfigUsuariosPage() {
 
     if (!form.name || !form.login || !form.email) {
       setErrorMsg("Nome, login e e-mail sao obrigatorios.");
+      return;
+    }
+
+    if (!form.sector) {
+      setErrorMsg("Selecione o setor do usuario.");
       return;
     }
 
@@ -210,6 +266,7 @@ export default function ConfigUsuariosPage() {
         status: form.status,
         accessChannel: form.accessChannel,
         supplierId: form.accessChannel === "industria" ? supplierIdParsed : null,
+        sector: form.sector,
       };
 
       if (form.password) {
@@ -457,8 +514,15 @@ export default function ConfigUsuariosPage() {
                 style={{ ...inputStyle, paddingRight: 28 }}
               >
                 <option value="USER">Usuario</option>
-                <option value="TENANT_ADMIN">Tenant Admin</option>
-                <option value="PLATFORM_ADMIN">Super Admin (plataforma)</option>
+                <option value="TENANT_ADMIN" disabled={isIndustryChannel}>
+                  Tenant Admin
+                </option>
+                <option value="SUPER_ADMIN" disabled={!isVarejoChannel}>
+                  Super Admin (varejo)
+                </option>
+                <option value="PLATFORM_ADMIN" disabled={form.role !== "PLATFORM_ADMIN"}>
+                  Super Admin (plataforma)
+                </option>
               </select>
             </Field>
 
@@ -467,17 +531,43 @@ export default function ConfigUsuariosPage() {
                 name="accessChannel"
                 value={form.accessChannel}
                 onChange={handleChange}
-                disabled={form.role === "PLATFORM_ADMIN"}
+                disabled={form.role === "PLATFORM_ADMIN" || form.role === "SUPER_ADMIN"}
                 style={{
                   ...inputStyle,
                   paddingRight: 28,
-                  background: form.role === "PLATFORM_ADMIN" ? "#f3f4f6" : "#fff",
+                  background:
+                    form.role === "PLATFORM_ADMIN" || form.role === "SUPER_ADMIN"
+                      ? "#f3f4f6"
+                      : "#fff",
                 }}
               >
                 <option value="industria">Industria</option>
                 <option value="varejo">Varejo</option>
                 <option value="interno">Super Admin</option>
               </select>
+            </Field>
+
+            <Field label="Setor (varejo)">
+              <select
+                name="sector"
+                value={form.sector}
+                onChange={handleChange}
+                disabled={!isVarejoChannel}
+                style={{
+                  ...inputStyle,
+                  paddingRight: 28,
+                  background: isVarejoChannel ? "#fff" : "#f3f4f6",
+                }}
+              >
+                {sectorOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <span style={{ fontSize: 11, color: "#6b7280" }}>
+                Define a área do varejo que o usuário pode acessar.
+              </span>
             </Field>
 
             <Field label="Fornecedor (apenas Industria)">
@@ -618,6 +708,7 @@ export default function ConfigUsuariosPage() {
                     <Th>E-mail</Th>
                     <Th>Perfil</Th>
                     <Th>Segmento</Th>
+                    <Th>Setor</Th>
                     <Th>Fornecedor</Th>
                     <Th>Status</Th>
                     <Th>Criado em</Th>
@@ -637,6 +728,7 @@ export default function ConfigUsuariosPage() {
                       <Td>{u.email}</Td>
                       <Td>{u.role}</Td>
                       <Td>{u.accessChannel || "-"}</Td>
+                      <Td>{sectorLabel(u.sector)}</Td>
                       <Td>
                         {u.supplierId
                           ? supplierMap.get(u.supplierId) || `ID ${u.supplierId}`
