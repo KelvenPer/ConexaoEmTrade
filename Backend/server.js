@@ -12,6 +12,7 @@ const produtosRoutes = require("./src/routes/produtos");
 const retailRoutes = require("./src/routes/retail");
 const initiativesRoutes = require("./src/routes/initiatives");
 const walletsRoutes = require("./src/routes/wallets");
+const analyticsRoutes = require("./src/routes/analytics");
 
 
 
@@ -39,6 +40,7 @@ app.use("/api/produtos", produtosRoutes);
 app.use("/api/varejos", retailRoutes);
 app.use("/api/iniciativas", initiativesRoutes);
 app.use("/api/wallets", walletsRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 const PORT = process.env.PORT || 8000;
 

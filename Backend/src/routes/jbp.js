@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../prisma');
 const { requireAuthUser } = require('../auth/requireAuth');
+const { resolveScope, applyScopeToWhere } = require("../auth/multiTenantFilter");
+const { approveJbp } = require("../services/jbpService");
 
 async function requireAuth(req, res) {
   return requireAuthUser(req, res);
@@ -44,6 +46,7 @@ router.get('/:id', async (req, res) => {
         },
         supplier: true,
         retail: true,
+        kpiQuery: true,
       },
     });
     if (!jbp) {
@@ -96,6 +99,7 @@ router.post('/', async (req, res) => {
       status,
       createdById: createdById ? parseInt(createdById, 10) : undefined,
       walletId: wallet ? wallet.id : undefined, // Adiciona o walletId
+      kpiQueryId: req.body.kpiQueryId ? parseInt(req.body.kpiQueryId, 10) : undefined,
     };
 
     const newJbp = await prisma.TBLJBP.create({
@@ -112,7 +116,43 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(newJbp);
   } catch (error) {
-    res.status(500).json({ message: 'Error creating JBP', error: error.message });
+  res.status(500).json({ message: 'Error creating JBP', error: error.message });
+  }
+});
+
+// APPROVE a JBP with automation
+router.post('/:id/approve', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+
+    const jbpId = Number(req.params.id);
+    if (Number.isNaN(jbpId)) {
+      return res.status(400).json({ message: "ID do JBP invalido." });
+    }
+
+    const scope = await resolveScope(user);
+    const where = applyScopeToWhere({ id: jbpId }, scope, {
+      supplierField: "supplierId",
+      retailField: "retailId",
+    });
+    if (where.id === -1) {
+      return res.status(403).json({ message: "Acesso negado para este JBP." });
+    }
+
+    const existing = await prisma.TBLJBP.findFirst({ where });
+    if (!existing) {
+      return res.status(404).json({ message: "JBP nao encontrado." });
+    }
+
+    const result = await approveJbp({ jbpId, userId: user.id });
+    return res.json({
+      message: "JBP aprovado e automacoes disparadas com sucesso.",
+      jbp: result,
+    });
+  } catch (error) {
+    console.error("Erro ao aprovar JBP:", error);
+    return res.status(500).json({ message: "Erro ao aprovar JBP.", error: error.message });
   }
 });
 
@@ -164,6 +204,17 @@ router.put('/:id', async (req, res) => {
     if (dataToUpdate.year) dataToUpdate.year = anoJbp;
     if (dataToUpdate.periodStart) dataToUpdate.periodStart = new Date(dataToUpdate.periodStart);
     if (dataToUpdate.periodEnd) dataToUpdate.periodEnd = new Date(dataToUpdate.periodEnd);
+    if (dataToUpdate.kpiQueryId !== undefined) {
+      if (dataToUpdate.kpiQueryId === null || dataToUpdate.kpiQueryId === "" || dataToUpdate.kpiQueryId === "null") {
+        dataToUpdate.kpiQueryId = null;
+      } else {
+        const parsedKpiQueryId = Number(dataToUpdate.kpiQueryId);
+        if (Number.isNaN(parsedKpiQueryId)) {
+          return res.status(400).json({ message: "kpiQueryId invalido." });
+        }
+        dataToUpdate.kpiQueryId = parsedKpiQueryId;
+      }
+    }
 
     const updatedJbp = await prisma.TBLJBP.update({
       where: { id: jbpIdNumber },

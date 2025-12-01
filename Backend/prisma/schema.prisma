@@ -257,6 +257,7 @@ model TBLJBP {
   createdById  Int?
   initiativeId Int?
   walletId     Int?
+  kpiQueryId   Int?
 
   supplier     TBLFORN        @relation(fields: [supplierId], references: [id])
   retail       TBLRETAIL?     @relation(fields: [retailId], references: [id])
@@ -267,6 +268,8 @@ model TBLJBP {
   vendasResumos TBLVENDASRESUMO[]
   initiative   TBLINITIATIVE? @relation(fields: [initiativeId], references: [id])
   wallet       TBLWALLET?     @relation(fields: [walletId], references: [id])
+  kpiQuery     TBLQUERY?      @relation(fields: [kpiQueryId], references: [id])
+  insights     TBLINSIGHT[]
 }
 
 model TBLJBPITEM {
@@ -531,12 +534,13 @@ model TBLSTORE {
   cluster       String? // Cluster A, B, C (Perfil de loja)
   city          String?
   state         String?
-  
+
   retail        TBLRETAIL          @relation(fields: [retailId], references: [id])
   tasks         TBLEXECTAREFA[]
   sales         TBLVENDASRESUMO[]
   dailySales    TBLDAILY_SALES[]
   jbpItemStores TBLJBPITEM_STORE[]
+  insights      TBLINSIGHT[]
 
   @@unique([retailId, code])
 }
@@ -608,6 +612,57 @@ model TBLWALLET {
   jbps     TBLJBP[]
 
   @@unique([supplierId, name, year])
+}
+
+// =========================
+// BI & Analytics (SQL Lab)
+// =========================
+
+model TBLQUERY {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  sqlQuery    String   @db.Text
+  createdById Int
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy   TBLUSER  @relation(fields: [createdById], references: [id])
+  jbps        TBLJBP[]
+}
+
+// =========================
+// Insights operacionais
+// =========================
+
+model TBLINSIGHT {
+  id          Int      @id @default(autoincrement())
+  tenantId    Int?
+  supplierId  Int?
+  retailId    Int?
+  storeId     Int?
+  jbpId       Int?
+  type        String   @default("info") // critical, warning, opportunity, info
+  category    String?
+  title       String
+  description String?
+  impact      String?
+  status      String   @default("aberto") // aberto, em_progresso, resolvido
+  actionType  String?
+  createdAt   DateTime @default(now())
+  resolvedAt  DateTime?
+
+  tenant   TBLTENANT? @relation(fields: [tenantId], references: [id])
+  supplier TBLFORN?   @relation(fields: [supplierId], references: [id])
+  retail   TBLRETAIL? @relation(fields: [retailId], references: [id])
+  store    TBLSTORE?  @relation(fields: [storeId], references: [id])
+  jbp      TBLJBP?    @relation(fields: [jbpId], references: [id])
+
+  @@index([supplierId])
+  @@index([retailId])
+  @@index([storeId])
+  @@index([jbpId])
 }
 
 // =========================
