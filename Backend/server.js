@@ -11,6 +11,7 @@ const campanhasRoutes = require("./src/routes/campanhas");
 const produtosRoutes = require("./src/routes/produtos");
 const retailRoutes = require("./src/routes/retail");
 const initiativesRoutes = require("./src/routes/initiatives");
+const walletsRoutes = require("./src/routes/wallets");
 
 
 
@@ -37,6 +38,7 @@ app.use("/api/campanhas", campanhasRoutes);
 app.use("/api/produtos", produtosRoutes);
 app.use("/api/varejos", retailRoutes);
 app.use("/api/iniciativas", initiativesRoutes);
+app.use("/api/wallets", walletsRoutes);
 
 const PORT = process.env.PORT || 8000;
 

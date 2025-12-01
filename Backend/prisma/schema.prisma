@@ -12,16 +12,16 @@ datasource db {
 // =========================
 
 enum TenantType {
-  INTERNAL   // você / plataforma
-  INDUSTRIA  // indústria (Nestlé, etc.)
-  VAREJO     // varejo (rede/loja)
+  INTERNAL // você / plataforma
+  INDUSTRIA // indústria (Nestlé, etc.)
+  VAREJO // varejo (rede/loja)
 }
 
 enum UserRole {
-  PLATFORM_ADMIN   // dono da plataforma (você)
-  SUPER_ADMIN      // admin mestre do tenant (ex.: varejo)
-  TENANT_ADMIN     // admin dentro do tenant (Nestlé, Varejo X)
-  USER             // usuário comum
+  PLATFORM_ADMIN // dono da plataforma (você)
+  SUPER_ADMIN // admin mestre do tenant (ex.: varejo)
+  TENANT_ADMIN // admin dentro do tenant (Nestlé, Varejo X)
+  USER // usuário comum
 }
 
 enum AccessChannel {
@@ -63,6 +63,25 @@ enum InitiativeType {
   COMERCIAL
 }
 
+enum ProofStatus {
+  PENDENTE
+  VALIDADO_IA
+  REJEITADO
+}
+
+enum WorkflowAction {
+  APROVACAO_SOLICITADA
+  APROVADO
+  REPROVADO
+  COMENTARIO_ADICIONADO
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
 // =========================
 // Tenant / Organização
 // =========================
@@ -75,11 +94,11 @@ model TBLTENANT {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
-  users     TBLUSER[]
-  suppliers TBLFORN[]
-  retailers TBLRETAIL[]
+  users        TBLUSER[]
+  suppliers    TBLFORN[]
+  retailers    TBLRETAIL[]
   partnerships TBLPARTNERSHIP[]
-  products   TBLPROD[]
+  products     TBLPROD[]
 }
 
 // =========================
@@ -98,7 +117,6 @@ model TBLFORN {
   updatedAt DateTime @updatedAt
 
   tenant        TBLTENANT             @relation(fields: [tenantId], references: [id])
-
   jbps          TBLJBP[]
   campanhas     TBLCAMPANHA[]
   execPlanos    TBLEXECPLANO[]
@@ -108,6 +126,8 @@ model TBLFORN {
   partnerships  TBLPARTNERSHIP[]
   products      TBLPROD[]
   initiatives   TBLINITIATIVE[]
+  wallets       TBLWALLET[]
+  dailySales    TBLDAILY_SALES[]
 }
 
 // =========================
@@ -125,8 +145,7 @@ model TBLRETAIL {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant        TBLTENANT             @relation(fields: [tenantId], references: [id])
-
+  tenant        TBLTENANT              @relation(fields: [tenantId], references: [id])
   jbps          TBLJBP[]
   campanhas     TBLCAMPANHA[]
   execPlanos    TBLEXECPLANO[]
@@ -135,6 +154,8 @@ model TBLRETAIL {
   users         TBLUSER[]
   partnerships  TBLPARTNERSHIP[]
   initiatives   TBLINITIATIVE[]
+  stores        TBLSTORE[]
+  dailySales    TBLDAILY_SALES[]
 }
 
 // =========================
@@ -202,12 +223,17 @@ model TBLPROD {
   tenant   TBLTENANT @relation(fields: [tenantId], references: [id])
   supplier TBLFORN   @relation(fields: [supplierId], references: [id])
 
-  jbpItens         TBLJBPITEM[]
-  campanhaItens    TBLCAMPANHAITEM[]
-  retailMediaItens TBLRETAILMEDIA_ITEM[]
+  jbpItens           TBLJBPITEM[]
+  campanhaItens      TBLCAMPANHAITEM[]
+  retailMediaItens   TBLRETAILMEDIA_ITEM[]
   initiativeProdutos TBLINITIATIVE_PRODUCT[]
+  vendasResumo       TBLVENDASRESUMO[]
+  dailySales         TBLDAILY_SALES[]
+  jbpItemMixes       TBLJBPITEM_MIX[]
 
   @@unique([tenantId, code])
+  @@index([brand])
+  @@index([category])
 }
 
 // =========================
@@ -215,31 +241,32 @@ model TBLPROD {
 // =========================
 
 model TBLJBP {
-  id          Int       @id @default(autoincrement())
-  supplierId  Int
-  retailId    Int?
-  name        String
-  year        Int?
-  periodStart DateTime?
-  periodEnd   DateTime?
-  strategy    String?
-  kpiSummary  String?
-  totalBudget Float?
-  status      String    @default("rascunho")
+  id           Int       @id @default(autoincrement())
+  supplierId   Int
+  retailId     Int?
+  name         String
+  year         Int?
+  periodStart  DateTime?
+  periodEnd    DateTime?
+  strategy     String?
+  kpiSummary   String?
+  totalBudget  Float?
+  status       String    @default("rascunho")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  createdById  Int?
+  initiativeId Int?
+  walletId     Int?
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  createdById Int?
-
-  supplier TBLFORN    @relation(fields: [supplierId], references: [id])
-  retail   TBLRETAIL? @relation(fields: [retailId], references: [id])
-  itens    TBLJBPITEM[]
-
-  campanhas     TBLCAMPANHA[]
-  execPlanos    TBLEXECPLANO[]
-  retailPlanos  TBLRETAILMEDIA_PLANO[]
+  supplier     TBLFORN        @relation(fields: [supplierId], references: [id])
+  retail       TBLRETAIL?     @relation(fields: [retailId], references: [id])
+  itens        TBLJBPITEM[]
+  campanhas    TBLCAMPANHA[]
+  execPlanos   TBLEXECPLANO[]
+  retailPlanos TBLRETAILMEDIA_PLANO[]
   vendasResumos TBLVENDASRESUMO[]
-  initiatives   TBLINITIATIVE[]
+  initiative   TBLINITIATIVE? @relation(fields: [initiativeId], references: [id])
+  wallet       TBLWALLET?     @relation(fields: [walletId], references: [id])
 }
 
 model TBLJBPITEM {
@@ -251,48 +278,61 @@ model TBLJBPITEM {
   initiativeType      String    @default("JBP")
   periodStart         DateTime?
   periodEnd           DateTime?
-  storeScope          String?
   unit                String?
   quantity            Int?
   negotiatedUnitPrice Float?
   totalValue          Float?
   notes               String?
 
-  jbp   TBLJBP @relation(fields: [jbpId], references: [id])
-  asset TBLATV @relation(fields: [assetId], references: [id])
-  product TBLPROD? @relation(fields: [productId], references: [id])
+  jbp     TBLJBP     @relation(fields: [jbpId], references: [id])
+  asset   TBLATV     @relation(fields: [assetId], references: [id])
+  product TBLPROD?   @relation(fields: [productId], references: [id])
 
   campanhaItens    TBLCAMPANHAITEM[]
   execTarefas      TBLEXECTAREFA[]
   retailMediaItens TBLRETAILMEDIA_ITEM[]
+  itemStores       TBLJBPITEM_STORE[]
+  proofs           TBLPROOF[]
+  mix              TBLJBPITEM_MIX[]
+}
+
+model TBLJBPITEM_MIX {
+  id                Int      @id @default(autoincrement())
+  jbpItemId         Int
+  productId         Int?
+  brandCriteria     String?
+  categoryCriteria  String?
+
+  jbpItem TBLJBPITEM @relation(fields: [jbpItemId], references: [id], onDelete: Cascade)
+  product TBLPROD?   @relation(fields: [productId], references: [id])
 }
 
 // =========================
-// Iniciativas (Trade/Marketing/Retail Media/E-commerce/Comercial)
+// Iniciativas (Guarda-chuva para JBP, Campanhas, etc.)
 // =========================
 
 model TBLINITIATIVE {
-  id           Int             @id @default(autoincrement())
-  jbpId        Int?
-  supplierId   Int?
-  retailId     Int?
-  type         InitiativeType
-  name         String
-  objective    String?
-  channel      String?
-  startDate    DateTime?
-  endDate      DateTime?
-  status       String          @default("planejada")
-  totalBudget  Float?
-  notes        String?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  id          Int            @id @default(autoincrement())
+  supplierId  Int?
+  retailId    Int?
+  type        InitiativeType
+  name        String
+  objective   String?
+  channel     String?
+  startDate   DateTime?
+  endDate     DateTime?
+  status      String         @default("planejada")
+  totalBudget Float?
+  notes       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
-  jbp      TBLJBP?    @relation(fields: [jbpId], references: [id])
   supplier TBLFORN?   @relation(fields: [supplierId], references: [id])
   retail   TBLRETAIL? @relation(fields: [retailId], references: [id])
   produtos TBLINITIATIVE_PRODUCT[]
   ativos   TBLINITIATIVE_ASSET[]
+  jbps     TBLJBP[]
+  campanhas TBLCAMPANHA[]
 }
 
 model TBLINITIATIVE_PRODUCT {
@@ -305,18 +345,18 @@ model TBLINITIATIVE_PRODUCT {
   notes          String?
 
   initiative TBLINITIATIVE @relation(fields: [initiativeId], references: [id])
-  product     TBLPROD      @relation(fields: [productId], references: [id])
+  product    TBLPROD       @relation(fields: [productId], references: [id])
 }
 
 model TBLINITIATIVE_ASSET {
-  id             Int           @id @default(autoincrement())
-  initiativeId   Int
-  assetId        Int
-  plannedValue   Float?
-  notes          String?
+  id           Int           @id @default(autoincrement())
+  initiativeId Int
+  assetId      Int
+  plannedValue Float?
+  notes        String?
 
   initiative TBLINITIATIVE @relation(fields: [initiativeId], references: [id])
-  asset       TBLATV       @relation(fields: [assetId], references: [id])
+  asset      TBLATV        @relation(fields: [assetId], references: [id])
 }
 
 // =========================
@@ -324,23 +364,25 @@ model TBLINITIATIVE_ASSET {
 // =========================
 
 model TBLCAMPANHA {
-  id         Int       @id @default(autoincrement())
-  supplierId Int
-  retailId   Int?
-  jbpId      Int?
-  name       String
-  objective  String?
-  channel    String?   // "LOJA_FISICA", "ECOMMERCE", "APP", etc.
-  startDate  DateTime?
-  endDate    DateTime?
-  status     String    @default("planejada") // planejada, em_producao, aprovada, veiculando, encerrada
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id           Int       @id @default(autoincrement())
+  supplierId   Int
+  retailId     Int?
+  jbpId        Int?
+  name         String
+  objective    String?
+  channel      String? // "LOJA_FISICA", "ECOMMERCE", "APP", etc.
+  startDate    DateTime?
+  endDate      DateTime?
+  status       String    @default("planejada") // planejada, em_producao, aprovada, veiculando, encerrada
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  initiativeId Int?
 
-  supplier TBLFORN    @relation(fields: [supplierId], references: [id])
-  retail   TBLRETAIL? @relation(fields: [retailId], references: [id])
-  jbp      TBLJBP?    @relation(fields: [jbpId], references: [id])
-  itens    TBLCAMPANHAITEM[]
+  supplier   TBLFORN        @relation(fields: [supplierId], references: [id])
+  retail     TBLRETAIL?     @relation(fields: [retailId], references: [id])
+  jbp        TBLJBP?        @relation(fields: [jbpId], references: [id])
+  itens      TBLCAMPANHAITEM[]
+  initiative TBLINITIATIVE? @relation(fields: [initiativeId], references: [id])
 }
 
 model TBLCAMPANHAITEM {
@@ -350,15 +392,14 @@ model TBLCAMPANHAITEM {
   assetId          Int
   productId        Int?
   title            String?
-  contentType      String?   // banner, video, push, post, etc.
+  contentType      String? // banner, video, push, post, etc.
   artDeadline      DateTime?
   approvalDeadline DateTime?
   goLiveDate       DateTime?
   urlDestino       String?
   notes            String?
-
-  creativeUrl      String?   // link da arte (Canva, Figma, Drive, imagem…)
-  approvalStatus   String    @default("rascunho") 
+  creativeUrl      String? // link da arte (Canva, Figma, Drive, imagem…)
+  approvalStatus   String    @default("rascunho")
 
   campanha TBLCAMPANHA @relation(fields: [campanhaId], references: [id])
   jbpItem  TBLJBPITEM? @relation(fields: [jbpItemId], references: [id])
@@ -382,9 +423,9 @@ model TBLEXECPLANO {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  supplier TBLFORN    @relation(fields: [supplierId], references: [id])
-  retail   TBLRETAIL? @relation(fields: [retailId], references: [id])
-  jbp      TBLJBP?    @relation(fields: [jbpId], references: [id])
+  supplier TBLFORN         @relation(fields: [supplierId], references: [id])
+  retail   TBLRETAIL?      @relation(fields: [retailId], references: [id])
+  jbp      TBLJBP?         @relation(fields: [jbpId], references: [id])
   tarefas  TBLEXECTAREFA[]
 }
 
@@ -393,7 +434,7 @@ model TBLEXECTAREFA {
   planoExecId Int
   jbpItemId   Int?
   assetId     Int
-  storeScope  String    // "Todas as lojas", "Top 50", "Loja 001", etc.
+  storeId     Int
   checklist   String?
   deadline    DateTime?
   status      String    @default("pendente") // pendente, em_execucao, concluida
@@ -403,6 +444,7 @@ model TBLEXECTAREFA {
   planoExec TBLEXECPLANO @relation(fields: [planoExecId], references: [id])
   jbpItem   TBLJBPITEM?  @relation(fields: [jbpItemId], references: [id])
   asset     TBLATV       @relation(fields: [assetId], references: [id])
+  store     TBLSTORE     @relation(fields: [storeId], references: [id])
 }
 
 // =========================
@@ -415,21 +457,21 @@ model TBLRETAILMEDIA_PLANO {
   retailId    Int?
   jbpId       Int?
   name        String
-  channel     String    // "ECOMMERCE", "APP"
+  channel     String // "ECOMMERCE", "APP"
   periodStart DateTime?
   periodEnd   DateTime?
   status      String    @default("planejado")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  supplier TBLFORN    @relation(fields: [supplierId], references: [id])
-  retail   TBLRETAIL? @relation(fields: [retailId], references: [id])
-  jbp      TBLJBP?    @relation(fields: [jbpId], references: [id])
+  supplier TBLFORN             @relation(fields: [supplierId], references: [id])
+  retail   TBLRETAIL?          @relation(fields: [retailId], references: [id])
+  jbp      TBLJBP?             @relation(fields: [jbpId], references: [id])
   itens    TBLRETAILMEDIA_ITEM[]
 }
 
 model TBLRETAILMEDIA_ITEM {
-  id                Int     @id @default(autoincrement())
+  id                Int       @id @default(autoincrement())
   planoRetailId     Int
   jbpItemId         Int?
   assetId           Int
@@ -450,16 +492,18 @@ model TBLRETAILMEDIA_ITEM {
 }
 
 // =========================
-// Vendas Resumo
+// Vendas Resumo (Agregado)
 // =========================
 
 model TBLVENDASRESUMO {
-  id           Int     @id @default(autoincrement())
+  id           Int      @id @default(autoincrement())
   supplierId   Int
   retailId     Int?
   jbpId        Int?
   ano          Int
   mes          Int
+  productId    Int // Essencial para saber O QUE vendeu
+  storeId      Int? // Essencial para saber ONDE vendeu (opcional se for agregado da rede)
   channel      String? // LOJA_FISICA, ECOMMERCE, TOTAL
   sellInValue  Float?
   sellOutValue Float?
@@ -470,10 +514,139 @@ model TBLVENDASRESUMO {
   supplier TBLFORN    @relation(fields: [supplierId], references: [id])
   retail   TBLRETAIL? @relation(fields: [retailId], references: [id])
   jbp      TBLJBP?    @relation(fields: [jbpId], references: [id])
+  product  TBLPROD    @relation(fields: [productId], references: [id])
+  store    TBLSTORE?  @relation(fields: [storeId], references: [id])
 }
 
 // =========================
-// Usuários
+// PDV / Lojas
+// =========================
+
+model TBLSTORE {
+  id            Int      @id @default(autoincrement())
+  retailId      Int
+  code          String // Código da loja no ERP do varejo
+  name          String
+  format        String? // Hiper, Super, Express
+  cluster       String? // Cluster A, B, C (Perfil de loja)
+  city          String?
+  state         String?
+  
+  retail        TBLRETAIL          @relation(fields: [retailId], references: [id])
+  tasks         TBLEXECTAREFA[]
+  sales         TBLVENDASRESUMO[]
+  dailySales    TBLDAILY_SALES[]
+  jbpItemStores TBLJBPITEM_STORE[]
+
+  @@unique([retailId, code])
+}
+
+// Join table para M2M entre JBPItem e Store
+model TBLJBPITEM_STORE {
+  jbpItemId Int
+  storeId   Int
+  
+  jbpItem   TBLJBPITEM @relation(fields: [jbpItemId], references: [id], onDelete: Cascade)
+  store     TBLSTORE   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@id([jbpItemId, storeId])
+}
+
+// =========================
+// Vendas Diarias (Sell-out)
+// =========================
+
+model TBLDAILY_SALES {
+  id           Int      @id @default(autoincrement())
+  date         DateTime @db.Date
+  productId    Int
+  storeId      Int
+  supplierId   Int
+  retailId     Int
+  sellOutValue Float?
+  volume       Float?
+
+  product  TBLPROD   @relation(fields: [productId], references: [id])
+  store    TBLSTORE  @relation(fields: [storeId], references: [id])
+  supplier TBLFORN   @relation(fields: [supplierId], references: [id])
+  retail   TBLRETAIL @relation(fields: [retailId], references: [id])
+
+  @@unique([date, productId, storeId])
+}
+
+// =========================
+// Proof of Performance
+// =========================
+
+model TBLPROOF {
+  id           Int         @id @default(autoincrement())
+  jbpItemId    Int
+  photoUrl     String
+  status       ProofStatus @default(PENDENTE)
+  aiConfidence Float? // Nível de certeza da IA
+  uploadedAt   DateTime    @default(now())
+
+  jbpItem TBLJBPITEM @relation(fields: [jbpItemId], references: [id], onDelete: Cascade)
+}
+
+// =========================
+// Gestão de Verbas (Wallet)
+// =========================
+
+model TBLWALLET {
+  id             Int       @id @default(autoincrement())
+  supplierId     Int
+  name           String
+  year           Int
+  totalBudget    Float
+  consumedBudget Float     @default(0)
+  status         String    @default("aberto") // aberto, fechado
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  supplier TBLFORN @relation(fields: [supplierId], references: [id])
+  jbps     TBLJBP[]
+
+  @@unique([supplierId, name, year])
+}
+
+// =========================
+// Auditoria e Workflow
+// =========================
+
+model TBLAUDITLOG {
+  id        Int         @id @default(autoincrement())
+  timestamp DateTime    @default(now())
+  userId    Int
+  action    AuditAction
+  tableName String
+  recordId  Int
+  oldValue  Json?
+  newValue  Json?
+
+  user TBLUSER @relation(fields: [userId], references: [id])
+
+  @@index([tableName, recordId])
+}
+
+model TBLWORKFLOW_HISTORY {
+  id           Int            @id @default(autoincrement())
+  timestamp    DateTime       @default(now())
+  relatedTable String // Ex: "TBLCAMPANHA"
+  recordId     Int
+  userId       Int
+  action       WorkflowAction
+  fromStatus   String?
+  toStatus     String?
+  reason       String? // Motivo da reprovação, comentário, etc.
+
+  user TBLUSER @relation(fields: [userId], references: [id])
+
+  @@index([relatedTable, recordId])
+}
+
+// =========================
+// Usuários e Acessos
 // =========================
 
 model TBLUSER {
@@ -492,9 +665,11 @@ model TBLUSER {
   retailId      Int?
   sector        UserSector    @default(MARKETING)
 
-  tenant   TBLTENANT  @relation(fields: [tenantId], references: [id])
-  supplier TBLFORN?   @relation(fields: [supplierId], references: [id])
-  retail   TBLRETAIL? @relation(fields: [retailId], references: [id])
+  tenant          TBLTENANT             @relation(fields: [tenantId], references: [id])
+  supplier        TBLFORN?              @relation(fields: [supplierId], references: [id])
+  retail          TBLRETAIL?            @relation(fields: [retailId], references: [id])
+  auditLogs       TBLAUDITLOG[]
+  workflowActions TBLWORKFLOW_HISTORY[]
 }
 
 // Politicas padrao de permissao por combinacao Role / Canal / Setor
