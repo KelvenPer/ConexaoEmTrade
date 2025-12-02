@@ -1,0 +1,82 @@
+-- AlterTable
+ALTER TABLE "TBLJBP" ADD COLUMN     "kpiQueryId" INTEGER;
+
+-- CreateTable
+CREATE TABLE "TBLQUERY" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "sqlQuery" TEXT NOT NULL,
+    "createdById" INTEGER NOT NULL,
+    "isPublic" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "TBLQUERY_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "TBLINSIGHT" (
+    "id" SERIAL NOT NULL,
+    "tenantId" INTEGER,
+    "supplierId" INTEGER,
+    "retailId" INTEGER,
+    "storeId" INTEGER,
+    "jbpId" INTEGER,
+    "type" TEXT NOT NULL DEFAULT 'info',
+    "category" TEXT,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "impact" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'aberto',
+    "actionType" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "resolvedAt" TIMESTAMP(3),
+
+    CONSTRAINT "TBLINSIGHT_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE INDEX "TBLINSIGHT_supplierId_idx" ON "TBLINSIGHT"("supplierId");
+
+-- CreateIndex
+CREATE INDEX "TBLINSIGHT_retailId_idx" ON "TBLINSIGHT"("retailId");
+
+-- CreateIndex
+CREATE INDEX "TBLINSIGHT_storeId_idx" ON "TBLINSIGHT"("storeId");
+
+-- CreateIndex
+CREATE INDEX "TBLINSIGHT_jbpId_idx" ON "TBLINSIGHT"("jbpId");
+
+-- CreateIndex
+CREATE INDEX "TBLCAMPANHA_status_idx" ON "TBLCAMPANHA"("status");
+
+-- CreateIndex
+CREATE INDEX "TBLEXECTAREFA_status_idx" ON "TBLEXECTAREFA"("status");
+
+-- CreateIndex
+CREATE INDEX "TBLJBP_status_idx" ON "TBLJBP"("status");
+
+-- CreateIndex
+CREATE INDEX "TBLVENDASRESUMO_ano_idx" ON "TBLVENDASRESUMO"("ano");
+
+-- AddForeignKey
+ALTER TABLE "TBLJBP" ADD CONSTRAINT "TBLJBP_kpiQueryId_fkey" FOREIGN KEY ("kpiQueryId") REFERENCES "TBLQUERY"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TBLQUERY" ADD CONSTRAINT "TBLQUERY_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "TBLUSER"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TBLINSIGHT" ADD CONSTRAINT "TBLINSIGHT_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "TBLTENANT"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TBLINSIGHT" ADD CONSTRAINT "TBLINSIGHT_supplierId_fkey" FOREIGN KEY ("supplierId") REFERENCES "TBLFORN"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TBLINSIGHT" ADD CONSTRAINT "TBLINSIGHT_retailId_fkey" FOREIGN KEY ("retailId") REFERENCES "TBLRETAIL"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TBLINSIGHT" ADD CONSTRAINT "TBLINSIGHT_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "TBLSTORE"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TBLINSIGHT" ADD CONSTRAINT "TBLINSIGHT_jbpId_fkey" FOREIGN KEY ("jbpId") REFERENCES "TBLJBP"("id") ON DELETE SET NULL ON UPDATE CASCADE;

@@ -462,104 +462,108 @@ export default function PainelLayout({ children }: LayoutProps) {
 
       {/* MAIN AREA */}
       <div className="app-shell__main">
-        {!pathname?.startsWith("/painel/config") && (
-          <header className="app-shell__topbar">
-            <div className="app-shell__topbar-left">
-              <div className="app-shell__topbar-title">Visao de Portfolio</div>
-              <div className="app-shell__topbar-sub">
-                Acompanhe JBP, campanhas, execucao em loja e resultados em uma visao unica.
+        {(() => {
+          const showTopbar = !pathname?.startsWith("/painel/config") && pathname !== "/painel";
+          if (!showTopbar) return null;
+          return (
+            <header className="app-shell__topbar">
+              <div className="app-shell__topbar-left">
+                <div className="app-shell__topbar-title">Visao de Portfolio</div>
+                <div className="app-shell__topbar-sub">
+                  Acompanhe JBP, campanhas, execucao em loja e resultados em uma visao unica.
+                </div>
               </div>
-            </div>
 
-            <div className="app-shell__topbar-right">
-              <span className="app-shell__env-tag">- Ambiente de demonstracao</span>
-              <button type="button" className="app-shell__primary-cta">
-                + Nova campanha
-              </button>
-              <div className="app-shell__user-menu" ref={menuRef}>
-                <button
-                  type="button"
-                  className="app-shell__user-chip"
-                  onClick={() => setMenuOpen((v) => !v)}
-                  aria-haspopup="true"
-                  aria-expanded={menuOpen}
-                >
-                  {userPhoto ? <img src={userPhoto} alt={userName} /> : getInitials(userName)}
+              <div className="app-shell__topbar-right">
+                <span className="app-shell__env-tag">- Ambiente de demonstracao</span>
+                <button type="button" className="app-shell__primary-cta">
+                  + Nova campanha
                 </button>
-                {menuOpen && (
-                  <div className="app-shell__user-popover">
-                    <div className="app-shell__user-header">
-                      <div className="app-shell__user-avatar">
-                        {userPhoto ? <img src={userPhoto} alt={userName} /> : getInitials(userName)}
+                <div className="app-shell__user-menu" ref={menuRef}>
+                  <button
+                    type="button"
+                    className="app-shell__user-chip"
+                    onClick={() => setMenuOpen((v) => !v)}
+                    aria-haspopup="true"
+                    aria-expanded={menuOpen}
+                  >
+                    {userPhoto ? <img src={userPhoto} alt={userName} /> : getInitials(userName)}
+                  </button>
+                  {menuOpen && (
+                    <div className="app-shell__user-popover">
+                      <div className="app-shell__user-header">
+                        <div className="app-shell__user-avatar">
+                          {userPhoto ? <img src={userPhoto} alt={userName} /> : getInitials(userName)}
+                        </div>
+                        <div>
+                          <div className="app-shell__user-name">{userName}</div>
+                          <div className="app-shell__user-role">{userRole}</div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="app-shell__user-name">{userName}</div>
-                        <div className="app-shell__user-role">{userRole}</div>
-                      </div>
-                    </div>
 
-                    <div className="app-shell__user-actions">
-                      <button
-                        type="button"
-                        className="app-shell__user-action"
-                        onClick={() => {
-                          setShowProfileModal(true);
-                          setMenuOpen(false);
-                        }}
-                      >
-                        Perfil
-                      </button>
-                      <button
-                        type="button"
-                        className="app-shell__user-action"
-                        onClick={() => {
-                          setShowPhotoModal(true);
-                          setMenuOpen(false);
-                        }}
-                      >
-                        Adicionar foto de perfil
-                      </button>
-                      <button
-                        type="button"
-                        className="app-shell__user-action"
-                        onClick={() => {
-                          setShowPasswordModal(true);
-                          setMenuOpen(false);
-                        }}
-                      >
-                        Trocar senha
-                      </button>
-                    </div>
-
-                    <div className="app-shell__user-theme">
-                      <span>Tema</span>
-                      <div className="app-shell__theme-switch">
+                      <div className="app-shell__user-actions">
                         <button
                           type="button"
-                          className={"app-shell__theme-pill" + (theme === "light" ? " is-active" : "")}
-                          onClick={() => toggleTheme("light")}
+                          className="app-shell__user-action"
+                          onClick={() => {
+                            setShowProfileModal(true);
+                            setMenuOpen(false);
+                          }}
                         >
-                          Light
+                          Perfil
                         </button>
                         <button
                           type="button"
-                          className={"app-shell__theme-pill" + (theme === "dark" ? " is-active" : "")}
-                          onClick={() => toggleTheme("dark")}
+                          className="app-shell__user-action"
+                          onClick={() => {
+                            setShowPhotoModal(true);
+                            setMenuOpen(false);
+                          }}
                         >
-                          Dark
+                          Adicionar foto de perfil
+                        </button>
+                        <button
+                          type="button"
+                          className="app-shell__user-action"
+                          onClick={() => {
+                            setShowPasswordModal(true);
+                            setMenuOpen(false);
+                          }}
+                        >
+                          Trocar senha
                         </button>
                       </div>
-                    </div>
 
-                    <button type="button" className="app-shell__user-logout" onClick={handleLogout}>
-                      Sair
-                    </button>
-                  </div>
-                )}
+                      <div className="app-shell__user-theme">
+                        <span>Tema</span>
+                        <div className="app-shell__theme-switch">
+                          <button
+                            type="button"
+                            className={"app-shell__theme-pill" + (theme === "light" ? " is-active" : "")}
+                            onClick={() => toggleTheme("light")}
+                          >
+                            Light
+                          </button>
+                          <button
+                            type="button"
+                            className={"app-shell__theme-pill" + (theme === "dark" ? " is-active" : "")}
+                            onClick={() => toggleTheme("dark")}
+                          >
+                            Dark
+                          </button>
+                        </div>
+                      </div>
+
+                      <button type="button" className="app-shell__user-logout" onClick={handleLogout}>
+                        Sair
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          </header>
-        )}
+            </header>
+          );
+        })()}
 
         <main className="app-shell__content">{children}</main>
       </div>

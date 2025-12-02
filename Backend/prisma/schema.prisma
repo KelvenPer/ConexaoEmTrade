@@ -99,6 +99,7 @@ model TBLTENANT {
   retailers    TBLRETAIL[]
   partnerships TBLPARTNERSHIP[]
   products     TBLPROD[]
+  insights     TBLINSIGHT[]
 }
 
 // =========================
@@ -128,6 +129,7 @@ model TBLFORN {
   initiatives   TBLINITIATIVE[]
   wallets       TBLWALLET[]
   dailySales    TBLDAILY_SALES[]
+  insights      TBLINSIGHT[]
 }
 
 // =========================
@@ -156,6 +158,7 @@ model TBLRETAIL {
   initiatives   TBLINITIATIVE[]
   stores        TBLSTORE[]
   dailySales    TBLDAILY_SALES[]
+  insights      TBLINSIGHT[]
 }
 
 // =========================
@@ -270,6 +273,8 @@ model TBLJBP {
   wallet       TBLWALLET?     @relation(fields: [walletId], references: [id])
   kpiQuery     TBLQUERY?      @relation(fields: [kpiQueryId], references: [id])
   insights     TBLINSIGHT[]
+
+  @@index([status])
 }
 
 model TBLJBPITEM {
@@ -386,6 +391,8 @@ model TBLCAMPANHA {
   jbp        TBLJBP?        @relation(fields: [jbpId], references: [id])
   itens      TBLCAMPANHAITEM[]
   initiative TBLINITIATIVE? @relation(fields: [initiativeId], references: [id])
+
+  @@index([status])
 }
 
 model TBLCAMPANHAITEM {
@@ -448,6 +455,8 @@ model TBLEXECTAREFA {
   jbpItem   TBLJBPITEM?  @relation(fields: [jbpItemId], references: [id])
   asset     TBLATV       @relation(fields: [assetId], references: [id])
   store     TBLSTORE     @relation(fields: [storeId], references: [id])
+
+  @@index([status])
 }
 
 // =========================
@@ -519,6 +528,8 @@ model TBLVENDASRESUMO {
   jbp      TBLJBP?    @relation(fields: [jbpId], references: [id])
   product  TBLPROD    @relation(fields: [productId], references: [id])
   store    TBLSTORE?  @relation(fields: [storeId], references: [id])
+
+  @@index([ano])
 }
 
 // =========================
@@ -723,6 +734,7 @@ model TBLUSER {
   tenant          TBLTENANT             @relation(fields: [tenantId], references: [id])
   supplier        TBLFORN?              @relation(fields: [supplierId], references: [id])
   retail          TBLRETAIL?            @relation(fields: [retailId], references: [id])
+  queries         TBLQUERY[]
   auditLogs       TBLAUDITLOG[]
   workflowActions TBLWORKFLOW_HISTORY[]
 }
